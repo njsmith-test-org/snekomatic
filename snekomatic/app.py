@@ -184,6 +184,7 @@ async def pull_request_merged(event_type, payload, gh_client):
 
 
 async def main(*, task_status=trio.TASK_STATUS_IGNORED):
+    print("GREETINGS FROM YAKVILLE")
     print("~~~ Starting up! ~~~")
     # On Heroku, have to bind to whatever $PORT says:
     # https://devcenter.heroku.com/articles/dynos#local-environment-variables
