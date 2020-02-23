@@ -1,7 +1,7 @@
 import sys
 import os
 import json
-import glom
+from glom import glom
 from pathlib import Path
 import pprint
 
