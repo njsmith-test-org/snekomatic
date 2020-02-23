@@ -202,6 +202,9 @@ async def handle_test_job(command, event_type, payload, gh_client):
             "event_type": "worker-job",
             "client_payload": {
                 "jobid": "test",
+                # Use the worker code snapshot that matches the currently
+                # deployed app. Requires this labs feature be enabled:
+                #   https://devcenter.heroku.com/articles/dyno-metadata
                 "worker_revision": os.environ["HEROKU_SLUG_COMMIT"],
                 "for": glom(payload, "repository.full_name"),
             }

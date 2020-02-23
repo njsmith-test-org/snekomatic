@@ -3976,6 +3976,7 @@ Setup will look like:
   - any pypi credentials etc.
 - The running app (heroku or whatever) will need stuff configured:
   - Which repository to issue "repository_dispatch" events on to trigger workers
+    SNEKOMATIC_WORKER_REPO
   - maybe credentials to do that?
 
 Todo:
