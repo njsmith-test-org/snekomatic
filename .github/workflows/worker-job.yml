@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
-          python-version: ${{ env.pyver}
+          python-version: ${{ env.pyver }}
       # This has to go after actions/checkout, because if we put it
       # first then actions/checkout will delete the downloaded
       # artifacts.
