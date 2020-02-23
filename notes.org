@@ -3978,6 +3978,19 @@ Setup will look like:
   - Which repository to issue "repository_dispatch" events on to trigger workers
   - maybe credentials to do that?
 
+Todo:
+- [ ] add caching to cut a minute off every worker job execution
+  - ugh, it doesn't work:
+    https://github.com/actions/cache/issues/63
+    In theory we could work around this by doing our own caching, e.g. by building docker images, or dumping stuff in some kind of blob storage. But ugh, I don't wanna. Hopefully they fix it soon.
+- [ ] validate who triggered the job
+- [ ] get revision id from the trigger payload
+- [ ] move into proper repo
+- [ ] trigger a job from snekomatic
+- [ ] track outstanding jobs
+- [ ] come up with some kind of plan for testing (invoke the worker from test suite, with fake github?)
+- [ ]
+
 ** Original notes
 
 We'll need to run code on checkouts:
