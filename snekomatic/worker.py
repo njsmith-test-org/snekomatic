@@ -13,9 +13,14 @@ payload = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
 print("Payload:")
 pprint.pprint(payload)
 
+job_info = glom(payload, "client_payload")
+print("Job info")
+pprint.pprint(job_info)
+
 if mode == "unprivileged":
     print("making artifact")
-    Path("artifacts/test").write_text("hello")
+    Path("worker-artifacts-dir").mkdir()
+    Path("worker-artifacts-dir/test").write_text("hello")
 else:
     print("reading artifact")
-    print("artifact says:", Path("artifacts/test").read_text())
+    print("artifact says:", Path("worker-artifacts-dir/test").read_text())
