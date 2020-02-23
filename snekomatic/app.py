@@ -197,16 +197,13 @@ async def handle_ping(command, event_type, payload, gh_client):
 @github_app.route_command("/test-job")
 async def handle_test_job(command, event_type, payload, gh_client):
     await gh_client.post(
-        "/repos/{owner}/{repo}/dispatches",
-        url_vars={
-            "owner": glom(payload, "repository.owner.login"),
-            "repo": glom(payload, "repository.name"),
-        },
+        f"/repos/{os.environ['SNEKOMATIC_WORKER_REPO']}/dispatches",
         data={
             "event_type": "worker-job",
             "client_payload": {
                 "jobid": "test",
                 "worker_revision": os.environ["HEROKU_SLUG_COMMIT"],
+                "for": glom(payload, "repository.full_name"),
             }
         }
     )
