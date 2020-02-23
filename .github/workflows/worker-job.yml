@@ -13,6 +13,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        ref: ${{ github.event.client_payload.worker_revision }}
       - uses: actions/setup-python@v1
         with:
           python-version: ${{ env.pyver }}
@@ -40,6 +41,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        ref: ${{ github.event.client_payload.worker_revision }}
       - uses: actions/setup-python@v1
         with:
           python-version: ${{ env.pyver }}
