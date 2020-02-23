@@ -207,8 +207,8 @@ async def handle_test_job(command, event_type, payload, gh_client):
                 #   https://devcenter.heroku.com/articles/dyno-metadata
                 "worker_revision": os.environ["HEROKU_SLUG_COMMIT"],
                 "for": glom(payload, "repository.full_name"),
-            }
-        }
+            },
+        },
     )
 
 

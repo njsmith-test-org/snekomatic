@@ -16,7 +16,9 @@ def test_consistency_check(heroku_style_pg):
     with psycopg2.connect(os.environ["DATABASE_URL"]) as conn:
         conn.autocommit = True
         with conn.cursor() as cur:
-            cur.execute("CREATE TABLE unexpected_table_asdofhsdf (hi integer);")
+            cur.execute(
+                "CREATE TABLE unexpected_table_asdofhsdf (hi integer);"
+            )
 
     # Now any attempt to access the database should raise an exception
     with pytest.raises(RuntimeError):
