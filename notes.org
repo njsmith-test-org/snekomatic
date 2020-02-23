@@ -3967,7 +3967,7 @@ event type: "issue_comment"
 * Github action notes
 Setup will look like:
 
-- The app's own repo has to live inside the org being managed (b/c we need permissions to trigger github actions on it)
+- The app's own repo has to live inside the org being managed (b/c we need permissions to trigger github actions on it, and webhook subscriptions)
 - Need to run 'heroku labs:enable runtime-dyno-metadata', so that the app can figure out what revision is deployed. (This means the heroku CLI is mandatory. Sigh.)
 - the repository_dispatch payload has to include the revision, so we can check out the right code. Also the installation id that we're working on behalf of.
 - The repository itself will need secrets configured:
@@ -3979,7 +3979,7 @@ Setup will look like:
   - maybe credentials to do that?
 
 Todo:
-- [ ] get revision id from the trigger payload
+- [X] get revision id from the trigger payload
   - though this still means the .yml file itself will come from the default branch
 - [ ] move into proper repo
 - [ ] trigger a job from snekomatic
