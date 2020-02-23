@@ -235,7 +235,7 @@ async def worker(mode):
 
     subprocess.run(["ls", "-R"])
 
-    if mode == "unprivileged":
+    if mode == "sandboxed":
         print("making artifact")
         Path("worker-artifacts-dir").mkdir()
         Path("worker-artifacts-dir/test").write_text("hello")
