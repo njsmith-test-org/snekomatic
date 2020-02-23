@@ -203,8 +203,11 @@ async def handle_test_job(command, event_type, payload, gh_client):
             "repo": glom(payload, "repository.name"),
         },
         data={
-            "jobid": "test",
-            "worker_revision": os.environ["HEROKU_SLUG_COMMIT"],
+            "event_type": "worker-job",
+            "client_payload": {
+                "jobid": "test",
+                "worker_revision": os.environ["HEROKU_SLUG_COMMIT"],
+            }
         }
     )
 
