@@ -194,6 +194,21 @@ async def handle_ping(command, event_type, payload, gh_client):
     )
 
 
+@github_app.route_command("/test-job")
+async def handle_test_job(command, event_type, payload, gh_client):
+    await gh_client.post(
+        "/repos/{owner}/{repo}/dispatches",
+        url_vars={
+            "owner": glom(payload, "repository.owner.login"),
+            "repo": glom(payload, "repository.name"),
+        },
+        data={
+            "jobid": "test",
+            "worker_revision": os.environ["HEROKU_SLUG_COMMIT"],
+        }
+    )
+
+
 async def main(*, task_status=trio.TASK_STATUS_IGNORED):
     print("~~~ Starting up! ~~~")
     # On Heroku, have to bind to whatever $PORT says:
