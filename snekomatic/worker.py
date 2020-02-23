@@ -8,6 +8,7 @@ import subprocess
 
 mode = sys.argv[1]
 print("Mode is:", mode)
+print("working dir:", os.getcwd())
 print("Kicked off by:", os.environ["GITHUB_ACTOR"])
 
 payload = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
@@ -18,16 +19,14 @@ job_info = glom(payload, "client_payload")
 print("Job info")
 pprint.pprint(job_info)
 
-subprocess.run(["ls"])
-subprocess.run(["ls", "worker-artifacts-dir", "-R"])
+subprocess.run(["ls", "-R"])
 
 if mode == "unprivileged":
     print("making artifact")
     Path("worker-artifacts-dir").mkdir()
     Path("worker-artifacts-dir/test").write_text("hello")
 
-    subprocess.run(["ls"])
-    subprocess.run(["ls", "worker-artifacts-dir", "-R"])
+    subprocess.run(["ls", "-R"])
 else:
     print("reading artifact")
     print("artifact says:", Path("worker-artifacts-dir/test").read_text())
