@@ -3965,6 +3965,21 @@ event type: "issue_comment"
 #+END_SRC
 
 * Github action notes
+Setup will look like:
+
+- The app's own repo has to live inside the org being managed (b/c we need permissions to trigger github actions on it)
+- Need to run 'heroku labs:enable runtime-dyno-metadata', so that the app can figure out what revision is deployed. (This means the heroku CLI is mandatory. Sigh.)
+- the repository_dispatch payload has to include the revision, so we can check out the right code. Also the installation id that we're working on behalf of.
+- The repository itself will need secrets configured:
+  - Who has permissions to trigger a worker job
+  - The app id + secret key, so it can mint github authorization tokens
+  - any pypi credentials etc.
+- The running app (heroku or whatever) will need stuff configured:
+  - Which repository to issue "repository_dispatch" events on to trigger workers
+  - maybe credentials to do that?
+
+** Original notes
+
 We'll need to run code on checkouts:
 - prepping before testing
   - format, bump version
