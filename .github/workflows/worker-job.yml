@@ -26,13 +26,13 @@ jobs:
     needs: unprivileged
 
     steps:
-      - uses: actions/download-artifact@v1
-        with:
-           name: worker-artifacts-dir
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
           python-version: 3.7
+      - uses: actions/download-artifact@v1
+        with:
+           name: worker-artifacts-dir
       - run: pip install -r requirements.txt
       - run: python -m snekomatic.worker privileged
         env:
