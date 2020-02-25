@@ -1,5 +1,11 @@
 import os
 from pathlib import Path
+from contextlib import contextmanager
+
+from sqlalchemy import create_engine, MetaData, Column, String
+from sqlalchemy.orm import Session
+from sqlalchemy.ext.declarative import declarative_base
+
 from sqlalchemy import create_engine, MetaData, Table, Column, ForeignKey
 from sqlalchemy.types import String, Integer, Boolean, DateTime, JSON
 from sqlalchemy.sql.expression import select, exists, text
@@ -22,30 +28,39 @@ naming_convention = {
 
 metadata = MetaData(naming_convention=naming_convention)
 
-sent_invitation = Table(
-    "persistent_set_sent_invitation",
-    metadata,
-    Column("entry", String, primary_key=True),
-)
+Base = declarative_base(metadata=metadata)
 
-worker_tasks = Table(
-    "worker_tasks",
-    metadata,
-    Column("task_id", String, primary_key=True),
-    Column("args", JSON, nullable=False),
-    Column("started", DateTime, nullable=False),
-    Column("finished", Boolean, nullable=False),
-)
 
-worker_task_messages = Table(
-    "worker_task_messages",
-    metadata,
-    Column("message_id", Integer, primary_key=True),
-    Column(
-        "task_id", String, ForeignKey("worker_tasks.task_id"), nullable=False
-    ),
-    Column("message", JSON, nullable=False),
-)
+class SentInvitation(Base):
+    __tablename__ = "persistent_set_sent_invitation"
+
+    name = Column("entry", String, primary_key=True)
+
+
+# sent_invitation = Table(
+#     "persistent_set_sent_invitation",
+#     metadata,
+#     Column("entry", String, primary_key=True),
+# )
+
+# worker_tasks = Table(
+#     "worker_tasks",
+#     metadata,
+#     Column("task_id", String, primary_key=True),
+#     Column("args", JSON, nullable=False),
+#     Column("started", DateTime, nullable=False),
+#     Column("finished", Boolean, nullable=False),
+# )
+
+# worker_task_messages = Table(
+#     "worker_task_messages",
+#     metadata,
+#     Column("message_id", Integer, primary_key=True),
+#     Column(
+#         "task_id", String, ForeignKey("worker_tasks.task_id"), nullable=False
+#     ),
+#     Column("message", JSON, nullable=False),
+# )
 
 
 @attr.s
@@ -57,7 +72,8 @@ class CachedEngine:
 CACHED_ENGINE = CachedEngine(None, None)
 
 
-def get_conn():
+@contextmanager
+def open_session():
     global CACHED_ENGINE
     if CACHED_ENGINE.database_url != os.environ["DATABASE_URL"]:
         engine = create_engine(os.environ["DATABASE_URL"])
@@ -103,26 +119,34 @@ def get_conn():
         # Iff that all worked out, then save the engine so we can skip those
         # checks next time
         CACHED_ENGINE = CachedEngine(engine, os.environ["DATABASE_URL"])
-    return CACHED_ENGINE.engine.connect()
+    session = Session(bind=CACHED_ENGINE.engine)
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
-class SentInvitation:
-    @staticmethod
-    def contains(name):
-        with get_conn() as conn:
-            # This is:
-            #   SELECT EXISTS (SELECT 1 FROM sent_invitation WHERE entry = ?)
-            return conn.execute(
-                select(
-                    [
-                        exists(
-                            select([1]).where(sent_invitation.c.entry == name)
-                        )
-                    ]
-                )
-            ).scalar()
+# class SentInvitation:
+#     @staticmethod
+#     def contains(name):
+#         with get_conn() as conn:
+#             # This is:
+#             #   SELECT EXISTS (SELECT 1 FROM sent_invitation WHERE entry = ?)
+#             return conn.execute(
+#                 select(
+#                     [
+#                         exists(
+#                             select([1]).where(sent_invitation.c.entry == name)
+#                         )
+#                     ]
+#                 )
+#             ).scalar()
 
-    @staticmethod
-    def add(name):
-        with get_conn() as conn:
-            conn.execute(sent_invitation.insert(), entry=name)
+#     @staticmethod
+#     def add(name):
+#         with get_conn() as conn:
+#             conn.execute(sent_invitation.insert(), entry=name)

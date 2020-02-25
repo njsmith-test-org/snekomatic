@@ -1,15 +1,7 @@
 import os
 import psycopg2
 import pytest
-from snekomatic.db import SentInvitation
-
-
-def test_SentInvitation(heroku_style_pg):
-    assert not SentInvitation.contains("foo")
-    assert not SentInvitation.contains("bar")
-    SentInvitation.add("foo")
-    assert SentInvitation.contains("foo")
-    assert not SentInvitation.contains("bar")
+from snekomatic.db import open_session
 
 
 @pytest.mark.skipif(
@@ -26,6 +18,8 @@ def test_consistency_check(heroku_style_pg):
 
     # Now any attempt to access the database should raise an exception
     with pytest.raises(RuntimeError):
-        SentInvitation.contains("foo")
+        with open_session():
+            pass
     with pytest.raises(RuntimeError):
-        SentInvitation.add("foo")
+        with open_session():
+            pass

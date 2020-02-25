@@ -9,7 +9,7 @@ from quart import request
 from quart_trio import QuartTrio
 from gidgethub.sansio import accept_format
 
-from .db import SentInvitation, get_conn
+from .db import SentInvitation, open_session
 from .gh import GithubApp, reply_url, reaction_url
 
 # we should stash the delivery id in a contextvar and include it in logging
@@ -87,7 +87,7 @@ async def main(*, task_status=trio.TASK_STATUS_IGNORED):
     print("~~~ Starting up! ~~~")
     # Make sure database connection works, schema is up to date, run any
     # required migrations, etc.
-    with get_conn() as conn:
+    with open_session() as conn:
         pass
     # On Heroku, have to bind to whatever $PORT says:
     # https://devcenter.heroku.com/articles/dynos#local-environment-variables

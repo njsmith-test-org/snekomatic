@@ -25,7 +25,7 @@ import gidgethub
 import textwrap
 from glom import glom
 
-from .db import SentInvitation
+from .db import open_session, SentInvitation
 from .gh import GithubRoutes
 
 autoinvite_routes = GithubRoutes()
@@ -102,6 +102,20 @@ async def _member_state(gh_client, org, member):
         return glom(response, "state")
 
 
+def already_sent_invitation(name):
+    with open_session() as session:
+        matches = session.query(SentInvitation).filter(
+            SentInvitation.name == name
+        )
+        return session.query(matches.exists()).scalar()
+
+
+def record_sent_invitation(name):
+    with open_session() as session:
+        session.add(SentInvitation(name=name))
+        session.commit()
+
+
 # There's no "merged" event; instead you get action=closed + merged=True
 @autoinvite_routes.route_webhook("pull_request", action="closed")
 async def pull_request_merged(event_type, payload, gh_client):
@@ -113,7 +127,7 @@ async def pull_request_merged(event_type, payload, gh_client):
     org = glom(payload, "organization.login")
     print(f"PR by {creator} was merged!")
 
-    if SentInvitation.contains(creator):
+    if already_sent_invitation(creator):
         print("The database says we already sent an invitation")
         return
 
@@ -121,7 +135,7 @@ async def pull_request_merged(event_type, payload, gh_client):
     if state is not None:
         # Remember for later so we don't keep checking the Github API over and
         # over.
-        SentInvitation.add(creator)
+        record_sent_invitation(creator)
         print(f"They already have member state {state}; not inviting")
         return
 
@@ -133,7 +147,7 @@ async def pull_request_merged(event_type, payload, gh_client):
         data={"role": "member"},
     )
     # Record that we did
-    SentInvitation.add(creator)
+    record_sent_invitation(creator)
     # Welcome them
     await gh_client.post(
         glom(payload, "pull_request.comments_url"),
