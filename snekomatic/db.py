@@ -1,13 +1,7 @@
 import os
 from pathlib import Path
 from sqlalchemy import create_engine, MetaData, Table, Column, ForeignKey
-from sqlalchemy.types import (
-    String,
-    Integer,
-    Boolean,
-    DateTime,
-    JSON,
-)
+from sqlalchemy.types import String, Integer, Boolean, DateTime, JSON
 from sqlalchemy.sql.expression import select, exists, text
 import alembic.config
 import alembic.command
@@ -76,13 +70,17 @@ def get_conn():
             print("-- DESTRUCTIVE TESTING ENABLED; WIPING DB --")
             with engine.connect() as conn:
                 # https://stackoverflow.com/questions/3327312/how-can-i-drop-all-the-tables-in-a-postgresql-database
-                conn.execute(text("""
-                  DROP SCHEMA public CASCADE;
-                  CREATE SCHEMA public;
-                  GRANT ALL ON SCHEMA public TO postgres;
-                  GRANT ALL ON SCHEMA public TO public;
-                  COMMIT;
-                """))
+                conn.execute(
+                    text(
+                        """
+                        DROP SCHEMA public CASCADE;
+                        CREATE SCHEMA public;
+                        GRANT ALL ON SCHEMA public TO postgres;
+                        GRANT ALL ON SCHEMA public TO public;
+                        COMMIT;
+                        """
+                    )
+                )
             metadata.create_all(engine)
         else:
             # Run any necessary migrations
