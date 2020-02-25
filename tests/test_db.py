@@ -12,6 +12,10 @@ def test_SentInvitation(heroku_style_pg):
     assert not SentInvitation.contains("bar")
 
 
+@pytest.mark.skipif(
+    "DESTRUCTIVE_TESTING_RESET_DB" in os.environ,
+    reason="destructive db resets enabled",
+)
 def test_consistency_check(heroku_style_pg):
     with psycopg2.connect(os.environ["DATABASE_URL"]) as conn:
         conn.autocommit = True

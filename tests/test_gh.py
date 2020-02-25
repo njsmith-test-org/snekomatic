@@ -127,22 +127,22 @@ async def test_github_app_webhook_routing(autojump_clock):
 
     record = []
 
-    @app.route("pull_request")
+    @app.route_webhook("pull_request")
     async def pull_request_any(event_type, payload, client):
         record.append(("pull_request_all", event_type, payload, client))
 
-    @app.route("pull_request", action="created")
+    @app.route_webhook("pull_request", action="created")
     async def pull_request_created(event_type, payload, client):
         record.append(("pull_request_created", event_type, payload, client))
 
     async def issue_created(event_type, payload, client):
         record.append(("issue_created", event_type, payload, client))
 
-    app.add(issue_created, "issue", action="created")
+    app.add_webhook(issue_created, "issue", action="created")
 
     with pytest.raises(TypeError):
 
-        @app.route("pull_request", action="created", user="njsmith")
+        @app.route_webhook("pull_request", action="created", user="njsmith")
         async def unnused(event_type, payload, client):  # pragma: no cover
             pass
 
@@ -260,7 +260,7 @@ async def test_github_app_webhook_client_works():
 
     handler_ran = False
 
-    @app.route("pull_request")
+    @app.route_webhook("pull_request")
     async def handler(event_type, payload, client):
         nonlocal handler_ran
         handler_ran = True
@@ -459,4 +459,4 @@ async def test_github_app_command_routing(autojump_clock, scenario):
         *fake_webhook("issues", test_payload, secret=TEST_WEBHOOK_SECRET)
     )
 
-    assert got_commands == scenario.expected_commands
+    assert sorted(got_commands) == sorted(scenario.expected_commands)

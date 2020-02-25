@@ -4,13 +4,18 @@ Basic setup:
 
   gh_app = GithubApp(...secrets and stuff...)
 
-  @gh_app.route("issue", action="created")
-  @gh_app.route("pull_request", action="created")
+  @gh_app.route_webhook("issue", action="created")
+  @gh_app.route_webhook("pull_request", action="created")
   async def handler(event_type, payload, gh_client):
       assert event_type in ["issue", "pull_request"]
       assert payload["action"] == "created"
       # 'gh_client' is a gidgethub-style github API client that automatically
       # uses the right credentials for this webhook event.
+
+  @gh_app.route_command("/ping")
+  async def handler(command, event_type, payload, gh_client):
+      assert command[0] == "/ping"
+      print("arguments:", command[1:])
 
 Integrate into webapp:
 
@@ -20,6 +25,17 @@ Integrate into webapp:
       body = await request.get_body()
       await gh_app.dispatch_webhook(headers, body)
       return ""
+
+If you want to collect up some routing rules as a bundle and then add them to
+an app, like a Flask "blueprint":
+
+  routes = GithubRoutes()
+
+  @routes.route_webhook("issue", action="created")
+  async def handler(...):
+      ...
+
+  gh_app.add_routes(routes)
 
 If you want to make API requests spontaneously, not in response to a
 webhook, then use one of these:
@@ -71,7 +87,7 @@ import pendulum
 import marko
 from marko.ext.gfm import gfm
 
-__all__ = ["GithubApp"]
+__all__ = ["GithubApp", "GithubRoutes"]
 
 # XX TODO: should we catch exceptions in webhook handlers, the same way flask
 # etc. catch exceptions in request handlers? right now the first exception
@@ -211,9 +227,61 @@ class CachedInstallationToken:
 
 
 @attr.s(frozen=True)
-class Route:
-    async_fn = attr.ib()
+class WebhookRoute:
     restrictions = attr.ib()
+    async_fn = attr.ib()
+
+
+# List of webhooks that can carry /-commands. Not included currently:
+# - edits/deletions
+# - commit comments
+# - "team discussion" comments
+_COMMENT_EVENTS = {
+    ("issues", "opened"),
+    ("pull_request", "opened"),
+    ("issue_comment", "created"),
+    ("pull_request_review", "submitted"),
+    ("pull_request_review_comment", "created"),
+}
+
+
+@attr.s
+class GithubRoutes:
+    _webhook_routes = attr.ib(factory=lambda: defaultdict(list))
+    _command_routes = attr.ib(factory=dict)
+
+    def add_webhook(self, async_fn, event_type, **restrictions):
+        if len(restrictions) > 1:
+            raise TypeError("At most one restriction is allowed (for now)")
+        self._webhook_routes[event_type].append(
+            WebhookRoute(restrictions, async_fn)
+        )
+
+    def route_webhook(self, event_type, **restrictions):
+        def decorator(async_fn):
+            self.add_webhook(async_fn, event_type, **restrictions)
+            return async_fn
+
+        return decorator
+
+    def add_command(self, async_fn, command_name):
+        if not command_name.startswith("/"):
+            command_name = "/" + command_name
+        assert command_name not in self._command_routes
+        self._command_routes[command_name] = async_fn
+
+    def route_command(self, command_name):
+        def decorator(async_fn):
+            self.add_command(async_fn, command_name)
+            return async_fn
+
+        return decorator
+
+    def update(self, other_table):
+        for event_type, handlers in other_table._webhook_routes.items():
+            self._webhook_routes[event_type] += handlers
+        for command, handler in other_table._command_routes.items():
+            self.add_command(handler, command)
 
 
 class GithubApp:
@@ -238,27 +306,8 @@ class GithubApp:
         self._private_key = private_key
         self._webhook_secret = webhook_secret
         self._installation_tokens = defaultdict(CachedInstallationToken)
-        # event_type -> [Route(...), Route(...), ...]
-        self._routes = defaultdict(list)
-        # command name -> handler
-        self._command_routes = {}
         self._cache = cachetools.LRUCache(cache_size)
-
-        # Not included currently:
-        # - edits/deletions
-        # - commit comments
-        # - "team discussion" comments
-        self.add(self._dispatch_command, "issues", action="opened")
-        self.add(self._dispatch_command, "pull_request", action="opened")
-        self.add(self._dispatch_command, "issue_comment", action="created")
-        self.add(
-            self._dispatch_command, "pull_request_review", action="submitted"
-        )
-        self.add(
-            self._dispatch_command,
-            "pull_request_review_comment",
-            action="created",
-        )
+        self._routes = GithubRoutes()
 
     user_agent = _lazy_env_fallback("user_agent")
     app_id = _lazy_env_fallback("app_id")
@@ -306,30 +355,20 @@ class GithubApp:
 
         return cit.token
 
-    def add(self, async_fn, event_type, **restrictions):
-        if len(restrictions) > 1:
-            raise TypeError("At most one restriction is allowed (for now)")
-        self._routes[event_type].append(Route(async_fn, restrictions))
+    def add_webhook(self, *args, **kwargs):
+        return self._routes.add_webhook(*args, **kwargs)
 
-    def route(self, event_type, **restrictions):
-        def decorator(async_fn):
-            self.add(async_fn, event_type, **restrictions)
-            return async_fn
+    def route_webhook(self, *args, **kwargs):
+        return self._routes.route_webhook(*args, **kwargs)
 
-        return decorator
+    def add_command(self, *args, **kwargs):
+        return self._routes.add_command(*args, **kwargs)
 
-    def add_command(self, async_fn, command_name):
-        if not command_name.startswith("/"):
-            command_name = "/" + command_name
-        assert command_name not in self._command_routes
-        self._command_routes[command_name] = async_fn
+    def route_command(self, *args, **kwargs):
+        return self._routes.route_command(*args, **kwargs)
 
-    def route_command(self, command_name):
-        def decorator(async_fn):
-            self.add_command(async_fn, command_name)
-            return async_fn
-
-        return decorator
+    def add_routes(self, routing_table):
+        self._routes.update(routing_table)
 
     async def dispatch_webhook(self, headers, body):
         event = Event.from_http(headers, body, secret=self.webhook_secret)
@@ -343,30 +382,37 @@ class GithubApp:
             print("No associated installation; not dispatching")
             return
         client = self.client_for(installation_id)
-        for route in self._routes[event.event]:
-            if _all_match(event.data, route.restrictions):
-                print(f"Routing to {route.async_fn!r}")
-                await route.async_fn(event.event, event.data, client)
+        # XX FIXME: do something cleverer about errors in handlers (e.g. don't
+        # let one of them crashing cancel the others)
+        async with anyio.create_task_group() as tg:
+            for route in self._routes._webhook_routes[event.event]:
+                if _all_match(event.data, route.restrictions):
+                    print(f"Routing to {route.async_fn!r}")
+                    await tg.spawn(
+                        route.async_fn, event.event, event.data, client
+                    )
+            if (event.event, event.data.get("action")) in _COMMENT_EVENTS:
+                body = get_comment_body(event.event, event.data)
+                for command in parse_commands(body):
+                    if command[0] in self._routes._command_routes:
+                        await tg.spawn(
+                            self._routes._command_routes[command[0]],
+                            command,
+                            event.event,
+                            event.data,
+                            client,
+                        )
+                    else:
+                        # We silently ignore unrecognized commands, because lines
+                        # starting with / can happen randomly, e.g. because of
+                        # absolute paths in warnings/traceback output.
+                        pass
         try:
             limit = client.rate_limit.remaining
         except AttributeError:
             pass
         else:
             print(f"Rate limit for install {installation_id}: {limit}")
-
-    async def _dispatch_command(self, event_type, payload, gh_client):
-        body = get_comment_body(event_type, payload)
-        for command in parse_commands(body):
-            if command[0] in self._command_routes:
-                # TODO: handle errors here
-                await self._command_routes[command[0]](
-                    command, event_type, payload, gh_client
-                )
-            else:
-                # We silently ignore unrecognized commands, because lines
-                # starting with / can happen randomly, e.g. because of
-                # absolute paths in warnings/traceback output.
-                pass
 
 
 _COMMENT_BODY_FIELDS_BY_EVENT_TYPE = {

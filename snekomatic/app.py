@@ -143,7 +143,7 @@ async def _member_state(gh_client, org, member):
 
 
 # There's no "merged" event; instead you get action=closed + merged=True
-@github_app.route("pull_request", action="closed")
+@github_app.route_webhook("pull_request", action="closed")
 async def pull_request_merged(event_type, payload, gh_client):
     print("PR closed")
     if not glom(payload, "pull_request.merged"):
