@@ -1,20 +1,15 @@
 import os
 from pathlib import Path
 from contextlib import contextmanager
-
+import pprint
+import attr
 from sqlalchemy import create_engine, MetaData, Column, String
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
-
-from sqlalchemy import create_engine, MetaData, Table, Column, ForeignKey
-from sqlalchemy.types import String, Integer, Boolean, DateTime, JSON
-from sqlalchemy.sql.expression import select, exists, text
 import alembic.config
 import alembic.command
 import alembic.migration
 import alembic.autogenerate
-import pprint
-import attr
 
 # Required to make sure that constraints like ForeignKey get a stable name so
 # migration can be supported.
@@ -37,12 +32,6 @@ class SentInvitation(Base):
     name = Column("entry", String, primary_key=True)
 
 
-# sent_invitation = Table(
-#     "persistent_set_sent_invitation",
-#     metadata,
-#     Column("entry", String, primary_key=True),
-# )
-
 # worker_tasks = Table(
 #     "worker_tasks",
 #     metadata,
@@ -63,7 +52,7 @@ class SentInvitation(Base):
 # )
 
 
-@attr.s
+@attr.s(frozen=True)
 class CachedEngine:
     engine = attr.ib()
     database_url = attr.ib()
@@ -128,25 +117,3 @@ def open_session():
         raise
     finally:
         session.close()
-
-
-# class SentInvitation:
-#     @staticmethod
-#     def contains(name):
-#         with get_conn() as conn:
-#             # This is:
-#             #   SELECT EXISTS (SELECT 1 FROM sent_invitation WHERE entry = ?)
-#             return conn.execute(
-#                 select(
-#                     [
-#                         exists(
-#                             select([1]).where(sent_invitation.c.entry == name)
-#                         )
-#                     ]
-#                 )
-#             ).scalar()
-
-#     @staticmethod
-#     def add(name):
-#         with get_conn() as conn:
-#             conn.execute(sent_invitation.insert(), entry=name)
