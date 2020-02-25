@@ -37,7 +37,7 @@ worker_tasks = Table(
     Column("finished", Boolean, nullable=False),
 )
 
-worker_task_events = Table(
+worker_task_messages = Table(
     "worker_task_messages",
     metadata,
     Column("message_id", Integer, primary_key=True),
