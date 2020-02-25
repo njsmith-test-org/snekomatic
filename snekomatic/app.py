@@ -194,17 +194,17 @@ async def handle_ping(command, event_type, payload, gh_client):
     )
 
 
-@github_app.route_command("/test-job")
-async def handle_test_job(command, event_type, payload, gh_client):
+@github_app.route_command("/test-task")
+async def handle_test_task(command, event_type, payload, gh_client):
     # Could figure out which gh client based on the worker repo instead:
     # https://developer.github.com/v3/apps/#get-a-repository-installation
     # probably want a gh_app.install_for_repo(...) method
     await gh_client.post(
         f"/repos/{os.environ['SNEKOMATIC_WORKER_REPO']}/dispatches",
         data={
-            "event_type": "worker-job",
+            "event_type": "worker-task",
             "client_payload": {
-                "jobid": "test",
+                "taskid": "test",
                 # Use the worker code snapshot that matches the currently
                 # deployed app. Requires this labs feature be enabled:
                 #   https://devcenter.heroku.com/articles/dyno-metadata
@@ -254,9 +254,9 @@ async def worker(mode):
     print("Payload:")
     pprint.pprint(payload)
 
-    job_info = glom(payload, "client_payload")
-    print("Job info")
-    pprint.pprint(job_info)
+    task_info = glom(payload, "client_payload")
+    print("Task info")
+    pprint.pprint(task_info)
 
     subprocess.run(["ls", "-R"])
 

@@ -34,21 +34,21 @@ sent_invitation = Table(
     Column("entry", String, primary_key=True),
 )
 
-worker_jobs = Table(
-    "worker_jobs",
+worker_tasks = Table(
+    "worker_tasks",
     metadata,
-    Column("job_id", String, primary_key=True),
+    Column("task_id", String, primary_key=True),
     Column("args", JSON, nullable=False),
     Column("started", DateTime, nullable=False),
     Column("finished", Boolean, nullable=False),
 )
 
-worker_job_events = Table(
-    "worker_job_messages",
+worker_task_events = Table(
+    "worker_task_messages",
     metadata,
     Column("message_id", Integer, primary_key=True),
     Column(
-        "job_id", String, ForeignKey("worker_jobs.job_id"), nullable=False
+        "task_id", String, ForeignKey("worker_tasks.task_id"), nullable=False
     ),
     Column("message", JSON, nullable=False),
 )
