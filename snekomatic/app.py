@@ -196,6 +196,9 @@ async def handle_ping(command, event_type, payload, gh_client):
 
 @github_app.route_command("/test-job")
 async def handle_test_job(command, event_type, payload, gh_client):
+    # Could figure out which gh client based on the worker repo instead:
+    # https://developer.github.com/v3/apps/#get-a-repository-installation
+    # probably want a gh_app.install_for_repo(...) method
     await gh_client.post(
         f"/repos/{os.environ['SNEKOMATIC_WORKER_REPO']}/dispatches",
         data={

@@ -3976,22 +3976,182 @@ Setup will look like:
   - any pypi credentials etc.
 - The running app (heroku or whatever) will need stuff configured:
   - Which repository to issue "repository_dispatch" events on to trigger workers
-    SNEKOMATIC_WORKER_REPO
+    -> SNEKOMATIC_WORKER_REPO
   - maybe credentials to do that?
+    naw, can figure it out using
 
 Todo:
 - [X] get revision id from the trigger payload
   - though this still means the .yml file itself will come from the default branch
 - [X] move into proper repo
-- [ ] trigger a job from snekomatic
+- [X] trigger a job from snekomatic
 - [ ] track outstanding jobs
 - [ ] come up with some kind of plan for testing (invoke the worker from test suite, with fake github?)
 - [ ] validate who triggered the job
   - is this actually necessary? anyone with write access to the repo can modify the code directly. Can anyone else send repository_dispatch?
+  - I have a question in to github support
 - [-] add caching to cut a minute off every worker job execution
   - ugh, it doesn't work:
     https://github.com/actions/cache/issues/63
     In theory we could work around this by doing our own caching, e.g. by building docker images, or dumping stuff in some kind of blob storage. But ugh, I don't wanna. Hopefully they fix it soon.
+  - ...or maybe stop using third-party libs in workers? I guess we need black, twine, but almost everything else is just json/subprocess calls, right? ...well, plus fetching the installation token, which needs gidgethub, jwt, etc. etc. Unless we fetch that from the app, but then we need another shared secret, and generally: ugh.
+
+Authenticating to github using an app installation token:
+
+git config http.https://github.com.extraheader "Authorization: basic $(base64 x-access-token:<installation token>)"
+Except instead of running the command, probably better to just write it directly to the config file
+(this is rigorously undocumented, but can be seen in the actions/checkout source. oh it's also mentioned in the tutorial that walks through writing a github app that uses rubocop and the checks api)
+and then can use https://...blah.git remotes
+
+I guess we want snekomatic's management to be enabled piece-by-piece, to start, i.e. only on specific repos?
+and for those repos it should probably auto-configure a branch protection rule that says only it is allowed to push to the repository, the end!
+branch protection rules can only be accessed using the v4 API: https://github.community/t5/GitHub-API-Development-and/Branch-protection-rule-wildcards-and-the-Branches-API-endpoint/td-p/22895
+(maybe a housekeeping job that runs every few hours and recreates this rule on all repos?)
+the specific repos also need to list which statuses are required
+[for email address, use: trio-bot@users.noreply.github.com]
+https://help.github.com/en/github/setting-up-and-managing-your-github-user-account/setting-your-commit-email-address#setting-your-commit-email-address-on-github
+
+checking CI status is a huge pain...
+bors-ng does it by:
+- fetching /commits/$sha/status and pulling out "context" + "state"
+- fetching /commits/$sha/check-runs and pulling out "name" + "conclusion"
+this is workable, but when using github actions as CI then every individual job gets its own check-run, so you have to list like 20 different things
+the actions are grouped into a "suite", and the "suite" has an overall status... but there doesn't appear to be any way to map the suite back to a name :-(. Could assume there's only one? could pick a run with a name we like and then map back to its corresponding suite? (i.e. expand "Linux (3.8)" into "everything in the same suite as Linux (3.8)"? annoying when we drop support for 3.8 though...) "there should be a completed suite whose corresponding app is github actions"?
+
+oh, hmm, but I can request workflow runs associated with a given branch:
+https://developer.github.com/v3/actions/workflow_runs/
+which might be enough...? have to poll for it though.
+The "workflow_runs" endpoint tells you the corresponding check_suite_url, but there doesn't seem to be any way to go the other way
+and you only get webhooks about check-stuff, not actions-stuff
+also a "workflow run" = "check suite", "workflow job" = "check run"
+
+And there's no way to find workflow runs except by listing all of them with a few weak filters
+
+maybe the thing to do is to wait for check suite completion events, and use that to trigger a workflow run query on our target branch to confirm?
+
+or hmm, it looks like maybe check runs have the same id as action runs?
+OK yeah so: given a check-run (e.g. from '/repos/:repo/commits/:ref/check-runs', or I assume from a webhook)
+you can take the "id", and fetch
+  /repos/:repo/actions/jobs/:id
+and that has a "run_url" which points to the overall invocation of the actions workflow (and also points back to the check suite, has a "html_url" that links to a human-readable page, etc.)
+which in turn points to a "workflows_url",
+and that tells you the yml file and name of the workflow that this check-run is coming from
+yeesh
+
+so we can listen for first check-run created on our new branch -> map it to workflow to check if it's one we care about, then map it to HTML link for "here's your status info", and map it to check-suite for actual green-checkmark-observation purposes
+
+so after our pre-check completes, we look up the branch to get the revision id
+and then watch for notifications about that revision id?
+  for check-runs we can watch for payload.check_run.check_suite.head_branch, I guess
+  or payload.check_run.head_sha
+I guess we need to look up the branch anyway for housekeeping, b/c lack-of-branch is a meaningful state
+and for legacy "statuses" (= travis)... not entirely sure actually. Maybe we can move to travis-ci.com and not deal with this? it looks like migration is pretty straightforward these days:
+  https://travis-ci.com/organizations/python-trio/migrate
+...however, the wacky github-actions-specific hacks won't work here anyway. For these I guess we need to pick the suite based on the name of a run inside it ("Travis CI - Branch"). Or just assume that there's only one suite for the Travis app? I think that has to be true in practice...
+
+maybe make everything idempotent, with some naming convention to indicate that?
+
+await run_job_idm(unique_id, args)
+or spits out link to the logs as a task_started?
+do we want to get return values from jobs? they could send a repository_dispatch back to us, or just do an HTTP POST... maybe use something derived from the app secret as a PSK?
+a nice thing about a POST is that we can get delivery confirmation and control retry behavior
+it would be nice if jobs could take a lock to prevent accidentally running two copies at the same time
+it's probably not a big issue for kick-off jobs, b/c they just create some stuff and push it to a repo
+
+maybe the abstraction is that a job has a reply channel? the first message is system generated and contains the link for the user; subsequent messages are arbitrary json
+
+so:
+- kick off a job. use canonical json of arguments to give it a unique id.
+- wait for github to report that it's been queued. at this point save in the db and report back? Or well.. don't really need to do that. Can just save in the db after github accepts the repository_dispatch, and let the id be reported later.
+- "reports" are either the check_run-created webhook, or ad hoc POST requests. either way we stick a record into the db, and then push it to listeners. the channel uses infinite buffering, b/c it just reads from the db. (could even use an actual in-database queue, but no real point.)
+
+data:
+- jobs:
+  - id (hash of json payload)
+  - json payload
+  - start time
+  - finished?
+- events
+  - event_id (sequential)
+  - job_id
+  - json_payload
+
+failure modes:
+- we send a repository_dispatch but crash before recording that in our db, so later we send a second one. mitigations:
+  - record first, so this gets treated like a flaky failure where the job times out?
+  - have jobs "take a lock" at startup by checking in and making sure they're the first ones to do so. (Of course in this case we could record that we've assigned the lock and then crash before we can tell the job it has the lock, which means... this basically reduces to the first case.)
+  - don't worry about it, just let multiple jobs get started?
+- timeouts/retries: I think ignore that at the worker job level, and make it the higher-level code's problem? for a /merge, if the setup job doesn't complete after N minutes, we can try again, BUT should use a new branch name. (oh, but we have to record this somewhere for idempotency, so if we get restarted then the second copy also does the retry with the new branch name.) ...OK maybe it's easier if timeouts are part of the worker job code, so we can make them a terminal condition.
+
+so when creating a new job, we want to save the deadline in the db
+and when resuming a stored job, first check if the timeout is expired but the job is marked as still running; if so, expire it immediately. (And possibly cancel it at github?)
+
+we probably do want to poll the job status occasionally, to self-heal in case of lost webhooks
+
+or do we only want a timeout on github accepting the job to run, and after that let github take care of it? if we're overloaded then jobs could potentially sit in the queue for quite a while :-/
+
+I guess we want *some* timeout though, like an hour or something...?
+
+maybe make it like
+   async def run_worker(*, timeout, **kwargs)
+and then in the workflow .yml something like:
+   jobs:
+     blah:
+       timeout-minutes: ${{ event.payload.client_data.timeout }}
+
+
+
+# For each worker job: create, connect to github job, monitor for completion,
+# react to completion
+#
+# high-level operations:
+# - try (fully parallel, comment or "check_run" back)
+# - merge (sequential, comment or "check_run" back)
+# - housekeeping (sequential, unique reporting)
+#
+# low-level operations:
+# - prepare for merge + start testing
+#   need:
+#     PR (with repo, target branch, etc.)
+#     branch to be used for testing (snekomatic/test/pr-<num>-build-<num>)
+# - do final merge / release / upload stuff
+#   (though maybe this doesn't need sandboxing etc., if the artifacts can be
+#   generated earlier?)
+
+# for 'try' and 'merge', want to pull out 'payload.pull_request.head.sha' from
+# the comment event; that's the revision they're talking about.
+
+# try:
+# - kick off job to run formatter, bump version, create testing branch
+#   - track success of this job
+# - wait for CI results on testing branch
+# - report back to user
+#
+# merge:
+# - wait in queue
+# - kick off job to run formatter, bump version, create testing branch
+#   - track success of this job
+# - wait for CI results on testing branch
+# - report back to user, push tested PR to branch, maybe build+upload
+#   artifacts + tag
+#   (or pull tested artifacts from CI?)
+#   and kick off the next queued job (if any)
+#
+# housekeeping:
+# - wait in queue
+# - kick off job to run housekeeping + formatter etc., using current branch as
+#   a base and going to a branch like snekomatic/housekeeping/<target branch>
+#   - track success of this job
+# - wait for CI results on testing branch +or+ notification that there's
+#   nothing to do (how? could do a direct POST but ick, another shared
+#   secret... just make the branch, and then we notice it has the same ref as
+#   the branch and delete it again? or just fail the housekeeping job with an
+#   error? ...or just say if it reports success but no branch appeared, that
+#   means there was nothing to do? that last one makes the most sense.)
+# - either continue like a merge, or open a PR (if there isn't one open
+#   already)
+#   either way kick off the next queued job (if any)
+
 
 ** Original notes
 
