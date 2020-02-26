@@ -39,3 +39,4 @@ e8jTxtp/VIfaRDKa4ZM5MDAoZ/6OvKe+KwMWT8NBW6LTKc2QZRtJ6WVD1FH6kaTZ
 # https://github.com/organizations/python-trio/settings/installations/1541311
 # (It's also available by querying the /app/installations endpoint)
 TEST_INSTALLATION_ID = "1541311"
+TEST_REPO = "python-trio/snekomatic"

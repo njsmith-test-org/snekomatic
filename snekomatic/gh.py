@@ -318,10 +318,19 @@ class GithubApp:
     def app_client(self):
         return AppGithubClient(self)
 
+    async def installation_id_for(self, repo):
+        result = await self.app_client.getitem(
+            "/repos/{+repo}/installation",
+            url_vars={"repo": repo},
+            accept=accept_format(version="machine-man-preview"),
+        )
+        return glom(result, "id")
+
     def client_for(self, installation_id):
         return InstallationGithubClient(self, installation_id)
 
     async def token_for(self, installation_id):
+        installation_id = int(installation_id)
         cit = self._installation_tokens[installation_id]
 
         while _too_close_for_comfort(cit.expires_at):
