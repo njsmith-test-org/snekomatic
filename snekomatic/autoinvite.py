@@ -104,9 +104,7 @@ async def _member_state(gh_client, org, member):
 
 def already_sent_invitation(name):
     with open_session() as session:
-        matches = session.query(SentInvitation).filter(
-            SentInvitation.name == name
-        )
+        matches = session.query(SentInvitation).filter_by(name=name)
         return session.query(matches.exists()).scalar()
 
 
