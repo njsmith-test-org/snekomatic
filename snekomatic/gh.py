@@ -41,7 +41,8 @@ If you want to make API requests spontaneously, not in response to a
 webhook, then use one of these:
 
   client = gh_app.app_client
-  client = gh_app.client_for(installation_id)
+  client = gh_app.client_for_installation_id(installation_id)
+  client = await gh_app.client_for_repo(repo)
 
 You can also get an installation token with 'await gh_app.token_for(...)',
 which is useful in case you want to run git commands directly using those
@@ -318,7 +319,7 @@ class GithubApp:
     def app_client(self):
         return AppGithubClient(self)
 
-    async def installation_id_for(self, repo):
+    async def installation_id_for_repo(self, repo):
         result = await self.app_client.getitem(
             "/repos/{+repo}/installation",
             url_vars={"repo": repo},
@@ -326,8 +327,12 @@ class GithubApp:
         )
         return glom(result, "id")
 
-    def client_for(self, installation_id):
+    def client_for_installation_id(self, installation_id):
         return InstallationGithubClient(self, installation_id)
+
+    async def client_for_repo(self, repo):
+        installation_id = await self.installation_id_for_repo(repo)
+        return self.client_for_installation_id(installation_id)
 
     async def token_for(self, installation_id):
         installation_id = int(installation_id)
@@ -390,7 +395,7 @@ class GithubApp:
         if installation_id is None:
             print("No associated installation; not dispatching")
             return
-        client = self.client_for(installation_id)
+        client = self.client_for_installation_id(installation_id)
         # XX FIXME: do something cleverer about errors in handlers (e.g. don't
         # let one of them crashing cancel the others)
         async with anyio.create_task_group() as tg:

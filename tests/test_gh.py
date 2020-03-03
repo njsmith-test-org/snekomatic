@@ -58,8 +58,12 @@ async def test_client_part_of_app():
     assert glom(data, "name") == "snekomatic-test"
 
     # We can map a repo to an installation id
-    installation_id = await app.installation_id_for(TEST_REPO)
+    installation_id = await app.installation_id_for_repo(TEST_REPO)
     assert installation_id == int(TEST_INSTALLATION_ID)
+
+    # Or map it directly to a client
+    client = await app.client_for_repo(TEST_REPO)
+    assert client.installation_id == int(TEST_INSTALLATION_ID)
 
     # We can get an installation token
     token = await app.token_for(TEST_INSTALLATION_ID)
@@ -71,7 +75,7 @@ async def test_client_part_of_app():
     assert token == await app.token_for(str(TEST_INSTALLATION_ID))
 
     # And the client works too:
-    i_client = app.client_for(TEST_INSTALLATION_ID)
+    i_client = app.client_for_installation_id(TEST_INSTALLATION_ID)
     assert i_client.app is app
     assert i_client.installation_id == TEST_INSTALLATION_ID
     data = await i_client.getitem("/rate_limit")
@@ -83,7 +87,7 @@ async def test_client_part_of_app():
     app._installation_tokens[int(TEST_INSTALLATION_ID)].expires_at = soon
 
     # The client still works...
-    i_client = app.client_for(TEST_INSTALLATION_ID)
+    i_client = app.client_for_installation_id(TEST_INSTALLATION_ID)
     data = await i_client.getitem("/rate_limit")
     assert "rate" in data
 
