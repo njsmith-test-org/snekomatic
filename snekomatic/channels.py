@@ -50,6 +50,8 @@ def send_message(domain, channel, message_id, message, *, final):
             .one_or_none()
         )
         if existing is not None:
+            print(f"(dupe message_id; skipping send_message "
+                  f"-> {domain}:{channel}, mid={message_id})")
             if message != existing.message or final != existing.final:
                 raise ValueError(
                     f"conflicting payloads for {domain}:{channel}:{message_id}: "
@@ -68,6 +70,9 @@ def send_message(domain, channel, message_id, message, *, final):
                 f"received new message for {domain}:{channel}, "
                 f"but it was already marked complete (new message: {message})"
             )
+
+        print(f"send_message -> {domain}:{channel} "
+              f"(mid={message_id}, final={final}: {message}")
 
         new = ChannelMessage(
             domain=domain,
