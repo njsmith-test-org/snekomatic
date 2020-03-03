@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     text,
+    Sequence,
 )
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
@@ -52,7 +53,12 @@ class ChannelMessage(Base):
     channel = Column(String, primary_key=True)
     # An opaque id for each message, to make message injection idempotent
     message_id = Column(String, primary_key=True)
-    order = Column(Integer, unique=True, autoincrement=True, nullable=False)
+    order = Column(
+        Integer,
+        Sequence("channel_message_order_seq"),
+        unique=True,
+        nullable=False,
+    )
     message = Column(JSON, nullable=False)
     final = Column(Boolean, nullable=False)
     # Currently unused, but included to give us the option of GC'ing old
