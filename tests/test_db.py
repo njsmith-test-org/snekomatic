@@ -1,7 +1,7 @@
 import os
 import psycopg2
 import pytest
-from snekomatic.db import open_session
+from snekomatic.db import open_session, already_check_and_set
 
 
 @pytest.mark.skipif(
@@ -23,3 +23,15 @@ def test_consistency_check(heroku_style_pg):
     with pytest.raises(RuntimeError):
         with open_session():
             pass
+
+
+def test_already_check_and_set(heroku_style_pg):
+    assert not already_check_and_set("d1", "i1")
+    assert already_check_and_set("d1", "i1")
+    assert already_check_and_set("d1", "i1")
+
+    assert not already_check_and_set("d2", "i1")
+    assert already_check_and_set("d2", "i1")
+
+    assert not already_check_and_set("d1", "i2")
+    assert already_check_and_set("d1", "i2")

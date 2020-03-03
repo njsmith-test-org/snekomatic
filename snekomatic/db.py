@@ -66,6 +66,27 @@ class ChannelMessage(Base):
     created = Column(DateTime, nullable=False)
 
 
+class Already(Base):
+    __tablename__ = "already"
+
+    domain = Column(String, primary_key=True)
+    item = Column(String, primary_key=True)
+
+
+# Returns True if we already did this
+# Returns False if we haven't done it, and as a side-effect sets the flag to
+# say we've done it.
+def already_check_and_set(domain, item):
+    with open_session() as session:
+        matches = session.query(Already).filter_by(domain=domain, item=item)
+        if session.query(matches.exists()).scalar():
+            return True
+        else:
+            session.add(Already(domain=domain, item=item))
+            session.commit()
+            return False
+
+
 class WorkerTask(Base):
     __tablename__ = "worker_task"
 
