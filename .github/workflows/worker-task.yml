@@ -1,7 +1,7 @@
-name: "Worker job"
+name: "Worker task"
 on:
   repository_dispatch:
-    types: [worker-job]
+    types: [worker-task]
 
 env:
   pyver: 3.7
@@ -9,7 +9,10 @@ env:
 jobs:
   sandboxed:
     runs-on: ubuntu-latest
-    name: "sandboxed-${{ github.event.client_payload.jobid }}"
+    timeout-minutes: 10
+    # This name format is critical: worker.py uses it to match up
+    # incoming webhook events with requested tasks.
+    name: "sandboxed-${{ github.event.client_payload.task_id }}"
 
     steps:
       - uses: actions/checkout@v2
@@ -18,8 +21,8 @@ jobs:
       - uses: actions/setup-python@v1
         with:
           python-version: ${{ env.pyver }}
-      # This should make worker jobs way faster! Unfortunately it
-      # doesn't work:
+      # This *should* make worker jobs way faster! But unfortunately
+      # it doesn't work:
       #
       #   https://github.com/actions/cache/issues/63
       #
@@ -37,7 +40,8 @@ jobs:
 
   privileged:
     runs-on: ubuntu-latest
-    name: "privileged-${{ github.event.client_payload.jobid }}"
+    timeout-minutes: 10
+    name: "privileged-${{ github.event.client_payload.task_id }}"
     needs: sandboxed
 
     steps:

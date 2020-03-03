@@ -3,7 +3,18 @@ from pathlib import Path
 from contextlib import contextmanager
 import pprint
 import attr
-from sqlalchemy import create_engine, MetaData, Column, String
+from sqlalchemy import (
+    create_engine,
+    MetaData,
+    Column,
+    String,
+    JSON,
+    Integer,
+    ForeignKey,
+    Boolean,
+    DateTime,
+    text,
+)
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
 import alembic.config
@@ -32,24 +43,30 @@ class SentInvitation(Base):
     name = Column("entry", String, primary_key=True)
 
 
-# worker_tasks = Table(
-#     "worker_tasks",
-#     metadata,
-#     Column("task_id", String, primary_key=True),
-#     Column("args", JSON, nullable=False),
-#     Column("started", DateTime, nullable=False),
-#     Column("finished", Boolean, nullable=False),
-# )
+class ChannelMessage(Base):
+    __tablename__ = "channel_message"
 
-# worker_task_messages = Table(
-#     "worker_task_messages",
-#     metadata,
-#     Column("message_id", Integer, primary_key=True),
-#     Column(
-#         "task_id", String, ForeignKey("worker_tasks.task_id"), nullable=False
-#     ),
-#     Column("message", JSON, nullable=False),
-# )
+    # Something like "task-result", basically the type of the channel
+    domain = Column(String, primary_key=True)
+    # Identifier for this specific channel within the domain (e.g. "task-123")
+    channel = Column(String, primary_key=True)
+    # An opaque id for each message, to make message injection idempotent
+    message_id = Column(String, primary_key=True)
+    order = Column(Integer, unique=True, autoincrement=True, nullable=False)
+    message = Column(JSON, nullable=False)
+    final = Column(Boolean, nullable=False)
+    # Currently unused, but included to give us the option of GC'ing old
+    # messages in the future
+    created = Column(DateTime, nullable=False)
+
+
+class WorkerTask(Base):
+    __tablename__ = "worker_task"
+
+    task_id = Column(String, primary_key=True)
+    args = Column(JSON, nullable=False)
+    check_suite_id = Column(Integer, unique=True, nullable=True)
+    start_time = Column(DateTime, nullable=False)
 
 
 @attr.s(frozen=True)
