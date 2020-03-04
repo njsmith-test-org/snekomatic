@@ -83,6 +83,11 @@ from .autoinvite import autoinvite_routes
 github_app.add_routes(autoinvite_routes)
 
 
+from .worker import worker_routes, run_worker_task_idem
+
+github_app.add_routes(worker_routes)
+
+
 async def main(*, task_status=trio.TASK_STATUS_IGNORED):
     print("~~~ Starting up! ~~~")
     # Make sure database connection works, schema is up to date, run any
@@ -104,6 +109,11 @@ async def main(*, task_status=trio.TASK_STATUS_IGNORED):
         urls = await nursery.start(hypercorn.trio.serve, quart_app, config)
         print("Accepting HTTP requests at:", urls)
         task_status.started(urls)
+
+        print("running worker task")
+        messages = await nursery.start(run_worker_task_idem, {"hi": "there"})
+        async for message in messages:
+            print(f"got message: {message}")
 
 
 async def worker(mode):
