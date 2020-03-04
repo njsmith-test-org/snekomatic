@@ -69,7 +69,7 @@ def send_message(domain, channel, message_id, message, *, final):
 
         print(
             f"send_message -> {domain}:{channel} "
-            f"(mid={message_id}, final={final}: {message}"
+            f"(mid={message_id}, final={final}): {message}"
         )
 
         new = ChannelMessage(
