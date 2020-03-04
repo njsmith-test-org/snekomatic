@@ -61,7 +61,7 @@ def encrypt_gh_secret(public_key: str, secret_value: str) -> str:
 
 async def setup_worker_tasks():
     repo = os.environ["SNEKOMATIC_WORKER_REPO"]
-    gh_client = await gh_app.client_for_repo(repo)
+    gh_client = await github_app.client_for_repo(repo)
 
     secrets = {
         "GITHUB_USER_AGENT": github_app.user_agent,
