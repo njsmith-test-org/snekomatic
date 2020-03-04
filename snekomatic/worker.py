@@ -75,7 +75,9 @@ async def run_worker_task_idem(args, *, task_status):
         if glom(message, "type") == "run-info":
             check_suite_id = glom(message, "check-suite-id")
             break
-    conclusion = await get_check_suite_conclusion(check_suite_id)
+    conclusion = await get_check_suite_conclusion(
+        os.environ["SNEKOMATIC_WORKER_REPO"], check_suite_id
+    )
     send_message(
         "worker-task",
         task_id,
@@ -116,9 +118,11 @@ async def worker_task_check_run_event(event_type, payload, gh_client):
 
 # XX the stuff below should probably move into a separate file, b/c it's a
 # more generally useful utility
-async def get_check_suite_conclusion(check_suite_id):
+async def get_check_suite_conclusion(repo, check_suite_id):
     async with trio.open_nursery() as nursery:
-        nursery.start_soon(check_suite_result_background_poller)
+        nursery.start_soon(
+            check_suite_result_background_poller, repo, check_suite_id, 5 * 60
+        )
         chan = messages("check-suite.completed", str(check_suite_id))
         async for conclusion in chan:
             nursery.cancel_scope.cancel()
