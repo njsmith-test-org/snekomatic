@@ -19,6 +19,9 @@
 import trio
 from glom import glom
 import os
+import json
+from base64 import b64encode
+from nacl import encoding, public
 
 from .gh import GithubRoutes
 from .channels import messages, send_message
@@ -43,6 +46,42 @@ worker_routes = GithubRoutes()
 # maybe the simplest is to have something like get_check_suite_conclusion,
 # where it polls the ref every 5 minutes, and also whenever a check_suite
 # is created on that ref.
+
+
+# https://developer.github.com/v3/actions/secrets/#example-encrypting-a-secret-using-python
+def encrypt_gh_secret(public_key: str, secret_value: str) -> str:
+    """Encrypt a Unicode string using the public key."""
+    public_key = public.PublicKey(
+        public_key.encode("utf-8"), encoding.Base64Encoder()
+    )
+    sealed_box = public.SealedBox(public_key)
+    encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
+    return b64encode(encrypted).decode("utf-8")
+
+
+async def setup_worker_tasks():
+    repo = os.environ["SNEKOMATIC_WORKER_REPO"]
+    gh_client = await gh_app.client_for_repo(repo)
+
+    secrets = {
+        "GITHUB_USER_AGENT": github_app.user_agent,
+        "GITHUB_APP_ID": github_app.app_id,
+        "GITHUB_PRIVATE_KEY": github_app.private_key,
+    }
+    secret_value = json.dumps(secrets)
+
+    keyinfo = await gh_client.getitem(
+        f"/repos/{repo}/actions/secrets/public-key"
+    )
+    encrypted_value = encrypt_gh_secret(secret_value, glom(resp, "key"))
+
+    await gh_client.put(
+        f"/repos/{repo}/actions/secrets/SNEKOMATIC_WORKER_SECRETS",
+        data={
+            "encrypted_value": encrypted_value,
+            "key_id": glom(keyinfo, "key_id"),
+        },
+    )
 
 
 async def start_worker_task_idem(args):

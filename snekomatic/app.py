@@ -83,7 +83,7 @@ from .autoinvite import autoinvite_routes
 github_app.add_routes(autoinvite_routes)
 
 
-from .worker import worker_routes, run_worker_task_idem
+from .worker import worker_routes, run_worker_task_idem, setup_worker_tasks
 
 github_app.add_routes(worker_routes)
 
@@ -98,6 +98,8 @@ async def main(*, task_status=trio.TASK_STATUS_IGNORED):
     # https://devcenter.heroku.com/articles/dynos#local-environment-variables
     port = os.environ.get("PORT", 8000)
     async with trio.open_nursery() as nursery:
+        await setup_worker_tasks()
+
         config = hypercorn.Config.from_mapping(
             bind=[f"0.0.0.0:{port}"],
             # Log to stdout
