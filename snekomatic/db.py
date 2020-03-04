@@ -8,7 +8,6 @@ from sqlalchemy import (
     MetaData,
     Column,
     String,
-    JSON,
     Integer,
     ForeignKey,
     Boolean,
@@ -16,6 +15,7 @@ from sqlalchemy import (
     text,
     Sequence,
 )
+from sqlalchemy.dialects.postgres import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
 import alembic.config
@@ -48,9 +48,9 @@ class ChannelMessage(Base):
     __tablename__ = "channel_message"
 
     # Something like "task-result", basically the type of the channel
-    domain = Column(String, primary_key=True)
+    domain = Column(JSONB, primary_key=True)
     # Identifier for this specific channel within the domain (e.g. "task-123")
-    channel = Column(String, primary_key=True)
+    channel = Column(JSONB, primary_key=True)
     # An opaque id for each message, to make message injection idempotent
     message_id = Column(String, primary_key=True)
     order = Column(
@@ -59,7 +59,7 @@ class ChannelMessage(Base):
         unique=True,
         nullable=False,
     )
-    message = Column(JSON, nullable=False)
+    message = Column(JSONB, nullable=False)
     final = Column(Boolean, nullable=False)
     # Currently unused, but included to give us the option of GC'ing old
     # messages in the future
@@ -69,8 +69,8 @@ class ChannelMessage(Base):
 class Already(Base):
     __tablename__ = "already"
 
-    domain = Column(String, primary_key=True)
-    item = Column(String, primary_key=True)
+    domain = Column(JSONB, primary_key=True)
+    item = Column(JSONB, primary_key=True)
 
 
 # Returns True if we already did this
@@ -85,15 +85,6 @@ def already_check_and_set(domain, item):
             session.add(Already(domain=domain, item=item))
             session.commit()
             return False
-
-
-class WorkerTask(Base):
-    __tablename__ = "worker_task"
-
-    task_id = Column(String, primary_key=True)
-    args = Column(JSON, nullable=False)
-    check_suite_id = Column(Integer, unique=True, nullable=True)
-    start_time = Column(DateTime, nullable=False)
 
 
 @attr.s(frozen=True)

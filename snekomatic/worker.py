@@ -39,6 +39,10 @@ worker_routes = GithubRoutes()
 # for waiting to find out the result of a github actions CI run:
 # - should get an event with the appropriate branch on it
 # - probably also want to poll for suites on that ref, for robustness
+#
+# maybe the simplest is to have something like get_check_suite_conclusion,
+# where it polls the ref every 5 minutes, and also whenever a check_suite
+# is created on that ref.
 
 
 async def start_worker_task_idem(args):
@@ -123,7 +127,7 @@ async def get_check_suite_conclusion(repo, check_suite_id):
         nursery.start_soon(
             check_suite_result_background_poller, repo, check_suite_id, 5 * 60
         )
-        chan = messages("check-suite.completed", str(check_suite_id))
+        chan = messages("check-suite.completed", check_suite_id)
         async for conclusion in chan:
             nursery.cancel_scope.cancel()
             return conclusion
@@ -143,7 +147,7 @@ async def check_suite_result_background_poller(
         if glom(response, "status") == "completed":
             send_message(
                 "check-suite.completed",
-                str(check_suite_id),
+                check_suite_id,
                 "completed",
                 glom(response, "conclusion"),
                 final=True,
@@ -159,7 +163,7 @@ async def check_suite_result_monitor(event_type, payload, gh_client):
     conclusion = glom(payload, "check_suite.conclusion")
     send_message(
         "check-suite.completed",
-        str(check_suite_id),
+        check_suite_id,
         "completed",
         conclusion,
         final=True,
