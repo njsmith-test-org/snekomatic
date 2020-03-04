@@ -18,6 +18,7 @@
 
 import trio
 from glom import glom
+import os
 
 from .gh import GithubRoutes
 from .channels import messages, send_message
