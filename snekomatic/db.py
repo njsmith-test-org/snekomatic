@@ -15,7 +15,7 @@ from sqlalchemy import (
     text,
     Sequence,
 )
-from sqlalchemy.dialects.postgres import JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
 import alembic.config
