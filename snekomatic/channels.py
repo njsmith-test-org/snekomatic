@@ -21,12 +21,7 @@ def _pulse_for(domain, channel):
 async def messages(domain, channel):
     max_seen = -1
     async for pulse in _pulse_for(domain, channel).subscribe():
-        print(f"pulsed! ({max_seen})")
         with open_session() as session:
-            try:
-                print(session.query(ChannelMessage).one().__dict__)
-            except:
-                pass
             messages = (
                 session.query(ChannelMessage)
                 .filter_by(domain=domain, channel=channel)
@@ -34,7 +29,6 @@ async def messages(domain, channel):
                 .order_by(ChannelMessage.order)
                 .all()
             )
-            print(messages)
             for message in messages:
                 yield message.message
                 if message.final:
@@ -88,5 +82,4 @@ def send_message(domain, channel, message_id, message, *, final):
         )
         session.add(new)
 
-    print("pulsing!")
     _pulse_for(domain, channel).pulse()
