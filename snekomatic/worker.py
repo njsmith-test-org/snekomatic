@@ -70,16 +70,16 @@ async def setup_worker_tasks():
     }
     secret_value = json.dumps(secrets)
 
-    keyinfo = await gh_client.getitem(
+    key_info = await gh_client.getitem(
         f"/repos/{repo}/actions/secrets/public-key"
     )
-    encrypted_value = encrypt_gh_secret(secret_value, glom(resp, "key"))
+    encrypted_value = encrypt_gh_secret(secret_value, glom(key_info, "key"))
 
     await gh_client.put(
         f"/repos/{repo}/actions/secrets/SNEKOMATIC_WORKER_SECRETS",
         data={
             "encrypted_value": encrypted_value,
-            "key_id": glom(keyinfo, "key_id"),
+            "key_id": glom(key_info, "key_id"),
         },
     )
 
