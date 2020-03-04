@@ -127,7 +127,7 @@ async def get_check_suite_conclusion(repo, check_suite_id):
         nursery.start_soon(
             check_suite_result_background_poller, repo, check_suite_id, 5 * 60
         )
-        chan = messages("check-suite.completed", check_suite_id)
+        chan = messages("check-suite.completed", str(check_suite_id))
         async for conclusion in chan:
             nursery.cancel_scope.cancel()
             return conclusion
@@ -147,7 +147,7 @@ async def check_suite_result_background_poller(
         if glom(response, "status") == "completed":
             send_message(
                 "check-suite.completed",
-                check_suite_id,
+                str(check_suite_id),
                 "completed",
                 glom(response, "conclusion"),
                 final=True,
@@ -163,7 +163,7 @@ async def check_suite_result_monitor(event_type, payload, gh_client):
     conclusion = glom(payload, "check_suite.conclusion")
     send_message(
         "check-suite.completed",
-        check_suite_id,
+        str(check_suite_id),
         "completed",
         conclusion,
         final=True,

@@ -48,9 +48,9 @@ class ChannelMessage(Base):
     __tablename__ = "channel_message"
 
     # Something like "task-result", basically the type of the channel
-    domain = Column(JSONB, primary_key=True)
+    domain = Column(String, primary_key=True)
     # Identifier for this specific channel within the domain (e.g. "task-123")
-    channel = Column(JSONB, primary_key=True)
+    channel = Column(String, primary_key=True)
     # An opaque id for each message, to make message injection idempotent
     message_id = Column(String, primary_key=True)
     order = Column(
@@ -69,8 +69,8 @@ class ChannelMessage(Base):
 class Already(Base):
     __tablename__ = "already"
 
-    domain = Column(JSONB, primary_key=True)
-    item = Column(JSONB, primary_key=True)
+    domain = Column(String, primary_key=True)
+    item = Column(String, primary_key=True)
 
 
 # Returns True if we already did this
