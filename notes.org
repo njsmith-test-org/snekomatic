@@ -3980,6 +3980,9 @@ Setup will look like:
   - maybe credentials to do that?
     naw, can figure it out using
 
+maybe we should have the app side generate a secret, put it in the db, and store it in the repo at startup, so we have one less piece of configury to move around? and rotate it automatically?
+and it uses that secret to fetch the other secrets on the fly, so the durable secrets don't leave the main app?
+
 Todo:
 - [X] get revision id from the trigger payload
   - though this still means the .yml file itself will come from the default branch

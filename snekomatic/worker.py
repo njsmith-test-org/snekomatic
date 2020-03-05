@@ -22,6 +22,7 @@ import os
 import json
 from base64 import b64encode
 from nacl import encoding, public
+from pendulum import duration
 
 from .gh import GithubRoutes
 from .channels import messages, send_message
@@ -93,7 +94,7 @@ async def setup_worker_tasks():
 
 async def start_worker_task_idem(args):
     task_id = hash_json(args)
-    if already_check_and_set("worker-task-started", task_id):
+    if already_check_and_set("worker-task-started", task_id, duration(days=30)):
         return task_id
 
     worker_repo = os.environ["SNEKOMATIC_WORKER_REPO"]

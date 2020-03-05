@@ -4,6 +4,7 @@ import json
 import secrets
 import asks
 from contextlib import contextmanager
+import pendulum
 
 # Partial duplicate of gidgethub.sansio.validate_event
 def sign_webhook(body: bytes, secret: str):
@@ -32,3 +33,13 @@ def save_environ():
     finally:
         os.environ.clear()
         os.environ.update(saved_env)
+
+
+# Workaround until https://github.com/sdispater/pendulum/pull/445 is fixed
+@contextmanager
+def mock_time(t):
+    pendulum.set_test_now(t)
+    try:
+        yield
+    finally:
+        pendulum.set_test_now()

@@ -22,6 +22,7 @@ import alembic.config
 import alembic.command
 import alembic.migration
 import alembic.autogenerate
+import pendulum
 
 # Required to make sure that constraints like ForeignKey get a stable name so
 # migration can be supported.
@@ -63,7 +64,7 @@ class ChannelMessage(Base):
     final = Column(Boolean, nullable=False)
     # Currently unused, but included to give us the option of GC'ing old
     # messages in the future
-    created = Column(DateTime, nullable=False)
+    created = Column(DateTime(timezone=True), nullable=False)
 
 
 class Already(Base):
@@ -71,20 +72,37 @@ class Already(Base):
 
     domain = Column(String, primary_key=True)
     item = Column(String, primary_key=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
 
 
-# Returns True if we already did this
+# Returns True if we already did this.
 # Returns False if we haven't done it, and as a side-effect sets the flag to
-# say we've done it.
-def already_check_and_set(domain, item):
+# say we've done it. The flag auto-expires after the given time. (Mostly
+# intended to allow GC later.)
+def already_check_and_set(
+    domain: str, item: str, expire_after: pendulum.duration
+) -> bool:
     with open_session() as session:
-        matches = session.query(Already).filter_by(domain=domain, item=item)
-        if session.query(matches.exists()).scalar():
-            return True
-        else:
-            session.add(Already(domain=domain, item=item))
-            session.commit()
-            return False
+        existing = (
+            session.query(Already)
+            .filter_by(domain=domain, item=item)
+            .one_or_none()
+        )
+        if existing is not None:
+            print(repr(existing.expires_at))
+            if pendulum.now(tz="UTC") < existing.expires_at:
+                return True
+            else:
+                session.delete(existing)
+        session.add(
+            Already(
+                domain=domain,
+                item=item,
+                expires_at=pendulum.now(tz="UTC") + expire_after,
+            )
+        )
+        session.commit()
+        return False
 
 
 @attr.s(frozen=True)
