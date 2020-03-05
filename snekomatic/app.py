@@ -110,10 +110,10 @@ async def main(*, task_status=trio.TASK_STATUS_IGNORED):
         print("Accepting HTTP requests at:", urls)
         task_status.started(urls)
 
-        # print("running worker task")
-        # messages = await nursery.start(run_worker_task_idem, {"hi": "there"})
-        # async for message in messages:
-        #     print(f"got message: {message}")
+        print("running worker task")
+        messages = await nursery.start(run_worker_task_idem, {"hi": "there"})
+        async for message in messages:
+            print(f"got message: {message}")
 
 
 async def worker(mode):
