@@ -29,6 +29,8 @@ from .app import github_app
 from .util import hash_json
 from .db import already_check_and_set
 
+__all__ = ["worker_routes", "run_worker_task_idem"]
+
 worker_routes = GithubRoutes()
 
 # for waiting to find out the check_suite_id+workflow_run_id for a worker task:
@@ -47,6 +49,7 @@ worker_routes = GithubRoutes()
 # where it polls the ref every 5 minutes, and also whenever a check_suite
 # is created on that ref.
 
+DID_SETUP_WORKER_TASKS_THIS_RUN = False
 
 # https://developer.github.com/v3/actions/secrets/#example-encrypting-a-secret-using-python
 def encrypt_gh_secret(public_key: str, secret_value: str) -> str:
@@ -60,6 +63,9 @@ def encrypt_gh_secret(public_key: str, secret_value: str) -> str:
 
 
 async def setup_worker_tasks():
+    global DID_SETUP_WORKER_TASKS_THIS_RUN
+    if DID_SETUP_WORKER_TASKS_THIS_RUN:
+        return
     repo = os.environ["SNEKOMATIC_WORKER_REPO"]
     gh_client = await github_app.client_for_repo(repo)
 
@@ -82,6 +88,7 @@ async def setup_worker_tasks():
             "key_id": glom(key_info, "key_id"),
         },
     )
+    DID_SETUP_WORKER_TASKS_THIS_RUN = True
 
 
 async def start_worker_task_idem(args):
@@ -112,6 +119,7 @@ async def start_worker_task_idem(args):
 
 
 async def run_worker_task_idem(args, *, task_status):
+    await setup_worker_tasks()
     task_id = await start_worker_task_idem(args)
     task_status.started(messages("worker-task", task_id))
     async for message in messages("worker-task", task_id):

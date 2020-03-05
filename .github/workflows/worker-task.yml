@@ -60,5 +60,4 @@ jobs:
       - run: python -m venv workenv && workenv/bin/pip install -r requirements.txt
       - run: workenv/bin/python -m snekomatic.worker_entrypoint privileged
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          SNEKOMATIC_WORKER_SECRETS: ${{ secrets.SNEKOMATIC_WORKER_SECRETS }}

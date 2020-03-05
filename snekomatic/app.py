@@ -83,7 +83,7 @@ from .autoinvite import autoinvite_routes
 github_app.add_routes(autoinvite_routes)
 
 
-from .worker import worker_routes, run_worker_task_idem, setup_worker_tasks
+from .worker import worker_routes, run_worker_task_idem
 
 github_app.add_routes(worker_routes)
 
@@ -98,8 +98,6 @@ async def main(*, task_status=trio.TASK_STATUS_IGNORED):
     # https://devcenter.heroku.com/articles/dynos#local-environment-variables
     port = os.environ.get("PORT", 8000)
     async with trio.open_nursery() as nursery:
-        await setup_worker_tasks()
-
         config = hypercorn.Config.from_mapping(
             bind=[f"0.0.0.0:{port}"],
             # Log to stdout
@@ -112,10 +110,10 @@ async def main(*, task_status=trio.TASK_STATUS_IGNORED):
         print("Accepting HTTP requests at:", urls)
         task_status.started(urls)
 
-        print("running worker task")
-        messages = await nursery.start(run_worker_task_idem, {"hi": "there"})
-        async for message in messages:
-            print(f"got message: {message}")
+        # print("running worker task")
+        # messages = await nursery.start(run_worker_task_idem, {"hi": "there"})
+        # async for message in messages:
+        #     print(f"got message: {message}")
 
 
 async def worker(mode):
@@ -141,11 +139,15 @@ async def worker(mode):
     subprocess.run(["ls", "-R"])
 
     if mode == "sandboxed":
+        assert "SNEKOMATIC_WORKER_SECRETS" not in os.environ
         print("making artifact")
         Path("worker-artifacts-dir").mkdir()
         Path("worker-artifacts-dir/test").write_text("hello")
 
         subprocess.run(["ls", "-R"])
     else:
+        secrets = json.loads(os.environ["SNEKOMATIC_WORKER_SECRETS"])
+        os.environ.update(secrets)
+        print(os.environ["GITHUB_USER_AGENT"])
         print("reading artifact")
         print("artifact says:", Path("worker-artifacts-dir/test").read_text())
