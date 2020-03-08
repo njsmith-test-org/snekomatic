@@ -136,7 +136,8 @@ async def worker(mode):
     print("Task info")
     pprint.pprint(task_info)
 
-    subprocess.run(["ls", "-R"])
+    args = glom(payload, "client_payload.args")
+    task_id = glom(payload, "client_payload.task_id")
 
     if mode == "sandboxed":
         assert "SNEKOMATIC_WORKER_SECRETS" not in os.environ
