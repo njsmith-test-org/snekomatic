@@ -20,8 +20,11 @@ github_app = GithubApp()
 
 if "SENTRY_DSN" in os.environ:
     import sentry_sdk
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
-    sentry_sdk.init(os.environ["SENTRY_DSN"])
+    sentry_sdk.init(
+        os.environ["SENTRY_DSN"], integrations=[SqlalchemyIntegration()]
+    )
 
     @quart.got_request_exception.connect
     async def error_handler(_, *, exception):
