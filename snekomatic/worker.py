@@ -25,7 +25,7 @@ from nacl import encoding, public
 from pendulum import duration
 
 from .gh import GithubRoutes
-from .channels import messages, send_message
+from .persistent import PDict
 from .app import github_app
 from .util import hash_json
 from .db import already_check_and_set
@@ -52,6 +52,7 @@ worker_routes = GithubRoutes()
 
 DID_SETUP_WORKER_TASKS_THIS_RUN = False
 
+# Pretty much copied directly from here:
 # https://developer.github.com/v3/actions/secrets/#example-encrypting-a-secret-using-python
 def encrypt_gh_secret(public_key: str, secret_value: str) -> str:
     """Encrypt a Unicode string using the public key."""
@@ -63,6 +64,9 @@ def encrypt_gh_secret(public_key: str, secret_value: str) -> str:
     return b64encode(encrypted).decode("utf-8")
 
 
+# This syncs up our secrets with the worker repo. It needs to run once each
+# time the secrets change. A convenient way to do this is to run it once per
+# run of the bot.
 async def setup_worker_tasks():
     global DID_SETUP_WORKER_TASKS_THIS_RUN
     if DID_SETUP_WORKER_TASKS_THIS_RUN:
@@ -92,9 +96,17 @@ async def setup_worker_tasks():
     DID_SETUP_WORKER_TASKS_THIS_RUN = True
 
 
+# This kicks off a worker task, at-most-one time. Unfortunately, there isn't
+# any way to make this 100% reliable; if the repository_dispatch event is
+# somehow lost, then it will never re-try, and run_worker_task will just hang
+# indefinitely. If this is a problem, it needs to be handled at a higher
+# level, by putting a timeout on run_worker_task and then retrying with a
+# *different* 'args' dict.
 async def start_worker_task_idem(args):
     task_id = hash_json(args)
-    if already_check_and_set("worker-task-started", task_id, duration(days=30)):
+    if already_check_and_set(
+        "worker-task-started", task_id, duration(days=30)
+    ):
         return task_id
 
     worker_repo = os.environ["SNEKOMATIC_WORKER_REPO"]
@@ -122,21 +134,13 @@ async def start_worker_task_idem(args):
 async def run_worker_task_idem(args, *, task_status):
     await setup_worker_tasks()
     task_id = await start_worker_task_idem(args)
-    task_status.started(messages("worker-task", task_id))
-    async for message in messages("worker-task", task_id):
-        if glom(message, "type") == "run-info":
-            check_suite_id = glom(message, "check-suite-id")
-            break
+    pdict = PDict("worker-task", task_id)
+    task_status.started(pdict)
+    check_suite_id = await pdict.glom("check-suite-id")
     conclusion = await get_check_suite_conclusion(
         os.environ["SNEKOMATIC_WORKER_REPO"], check_suite_id
     )
-    send_message(
-        "worker-task",
-        task_id,
-        "final-conclusion",
-        {"type": "final-conclusion", "conclusion": conclusion},
-        final=True,
-    )
+    pdict.update({"conclusion": conclusion})
 
 
 @worker_routes.route_webhook("check_run")
@@ -165,7 +169,14 @@ async def worker_task_check_run_event(event_type, payload, gh_client):
         "html-url": glom(payload, "check_run.html_url"),
     }
 
-    send_message("worker-task", task_id, "run-info", run_info, final=False)
+    PDict("worker-task", task_id).update(
+        {
+            "repo": repo,
+            "check-suite-id": glom(payload, "check_run.check_suite.id"),
+            "check-run-id": glom(payload, "check_run.id"),
+            "html-url": glom(payload, "check_run.html-url"),
+        }
+    )
 
 
 # XX the stuff below should probably move into a separate file, b/c it's a
@@ -175,10 +186,10 @@ async def get_check_suite_conclusion(repo, check_suite_id):
         nursery.start_soon(
             check_suite_result_background_poller, repo, check_suite_id, 5 * 60
         )
-        chan = messages("check-suite.completed", str(check_suite_id))
-        async for conclusion in chan:
-            nursery.cancel_scope.cancel()
-            return conclusion
+        pdict = PDict("check-suite.completed", str(check_suite_id))
+        conclusion = await pdict.glom("conclusion")
+        nursery.cancel_scope.cancel()
+        return conclusion
 
 
 # Helper for get_check_suite_conclusion
@@ -193,12 +204,8 @@ async def check_suite_result_background_poller(
             accept="application/vnd.github.antiope-preview+json",
         )
         if glom(response, "status") == "completed":
-            send_message(
-                "check-suite.completed",
-                str(check_suite_id),
-                "completed",
-                glom(response, "conclusion"),
-                final=True,
+            PDict("check-suite.completed", str(check_suite_id)).update(
+                {"conclusion": glom(response, "conclusion")}
             )
             return
         await trio.sleep(interval)
@@ -209,10 +216,6 @@ async def check_suite_result_background_poller(
 async def check_suite_result_monitor(event_type, payload, gh_client):
     check_suite_id = glom(payload, "check_suite.id")
     conclusion = glom(payload, "check_suite.conclusion")
-    send_message(
-        "check-suite.completed",
-        str(check_suite_id),
-        "completed",
-        conclusion,
-        final=True,
+    PDict("check-suite.completed", str(check_suite_id)).update(
+        {"conclusion": conclusion}
     )

@@ -29,16 +29,24 @@ def test_consistency_check(heroku_style_pg):
 
 def test_already_check_and_set(heroku_style_pg):
     with mock_time(pendulum.datetime(2020, 1, 1)):
-        assert not already_check_and_set("d1", "i1", pendulum.duration(days=1))
+        assert not already_check_and_set(
+            "d1", "i1", pendulum.duration(days=1)
+        )
         assert already_check_and_set("d1", "i1", pendulum.duration(days=1))
         assert already_check_and_set("d1", "i1", pendulum.duration(days=1))
 
-        assert not already_check_and_set("d2", "i1", pendulum.duration(days=1))
+        assert not already_check_and_set(
+            "d2", "i1", pendulum.duration(days=1)
+        )
         assert already_check_and_set("d2", "i1", pendulum.duration(days=1))
 
-        assert not already_check_and_set("d1", "i2", pendulum.duration(days=1))
+        assert not already_check_and_set(
+            "d1", "i2", pendulum.duration(days=1)
+        )
         assert already_check_and_set("d1", "i2", pendulum.duration(days=1))
 
     with mock_time(pendulum.datetime(2020, 1, 3)):
-        assert not already_check_and_set("d1", "i1", pendulum.duration(days=1))
+        assert not already_check_and_set(
+            "d1", "i1", pendulum.duration(days=1)
+        )
         assert already_check_and_set("d1", "i1", pendulum.duration(days=1))

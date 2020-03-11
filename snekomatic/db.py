@@ -45,6 +45,17 @@ class SentInvitation(Base):
     name = Column("entry", String, primary_key=True)
 
 
+class PDictDBEntry(Base):
+    __tablename__ = "pdict"
+
+    # Something like "task-result", basically the type of the value
+    domain = Column(String, primary_key=True)
+    # Identifier for this specific value within the domain (e.g. "task-123")
+    item = Column(String, primary_key=True)
+    # The current value.
+    value = Column(JSONB, nullable=False)
+
+
 class ChannelMessage(Base):
     __tablename__ = "channel_message"
 
