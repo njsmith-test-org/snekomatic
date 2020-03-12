@@ -61,16 +61,13 @@ class Already(Base):
 
     domain = Column(String, primary_key=True)
     item = Column(String, primary_key=True)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
 
 
 # Returns True if we already did this.
 # Returns False if we haven't done it, and as a side-effect sets the flag to
 # say we've done it. The flag auto-expires after the given time. (Mostly
 # intended to allow GC later.)
-def already_check_and_set(
-    domain: str, item: str, expire_after: pendulum.duration
-) -> bool:
+def already_check_and_set(domain: str, item: str) -> bool:
     with open_session() as session:
         existing = (
             session.query(Already)
@@ -78,20 +75,10 @@ def already_check_and_set(
             .one_or_none()
         )
         if existing is not None:
-            print(repr(existing.expires_at))
-            if pendulum.now(tz="UTC") < existing.expires_at:
-                return True
-            else:
-                session.delete(existing)
-        session.add(
-            Already(
-                domain=domain,
-                item=item,
-                expires_at=pendulum.now(tz="UTC") + expire_after,
-            )
-        )
-        session.commit()
-        return False
+            return True
+        else:
+            session.add(Already(domain=domain, item=item))
+            return False
 
 
 @attr.s(frozen=True)
