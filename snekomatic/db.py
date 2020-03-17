@@ -15,6 +15,7 @@ from sqlalchemy import (
     text,
     Sequence,
 )
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
@@ -22,7 +23,7 @@ import alembic.config
 import alembic.command
 import alembic.migration
 import alembic.autogenerate
-import pendulum
+from psycopg2.errors import SerializationFailure
 
 # Required to make sure that constraints like ForeignKey get a stable name so
 # migration can be supported.
@@ -68,17 +69,19 @@ class Already(Base):
 # say we've done it. The flag auto-expires after the given time. (Mostly
 # intended to allow GC later.)
 def already_check_and_set(domain: str, item: str) -> bool:
-    with open_session() as session:
-        existing = (
-            session.query(Already)
-            .filter_by(domain=domain, item=item)
-            .one_or_none()
-        )
-        if existing is not None:
-            return True
-        else:
-            session.add(Already(domain=domain, item=item))
-            return False
+    with retry_txn() as attempts:
+        for session in attempts:
+            existing = (
+                session.query(Already)
+                .filter_by(domain=domain, item=item)
+                .one_or_none()
+            )
+            if existing is not None:
+                result = True
+            else:
+                session.add(Already(domain=domain, item=item))
+                result = False
+    return result
 
 
 @attr.s(frozen=True)
@@ -90,11 +93,12 @@ class CachedEngine:
 CACHED_ENGINE = CachedEngine(None, None)
 
 
-@contextmanager
-def open_session():
+def _get_session():
     global CACHED_ENGINE
     if CACHED_ENGINE.database_url != os.environ["DATABASE_URL"]:
-        engine = create_engine(os.environ["DATABASE_URL"])
+        engine = create_engine(
+            os.environ["DATABASE_URL"], isolation_level="SERIALIZABLE"
+        )
 
         # Set this *temporarily* in a *test* environment to reset the database
         # at startup. Useful if you're iterating on db schema changes and
@@ -137,12 +141,46 @@ def open_session():
         # Iff that all worked out, then save the engine so we can skip those
         # checks next time
         CACHED_ENGINE = CachedEngine(engine, os.environ["DATABASE_URL"])
-    session = Session(bind=CACHED_ENGINE.engine)
+    return Session(bind=CACHED_ENGINE.engine)
+
+
+@contextmanager
+def retry_txn():
+    committed = False
+    pending_session = None
+
+    def session_gen():
+        nonlocal committed, pending_session
+        while True:
+            if pending_session is not None:
+                try:
+                    pending_session.commit()
+                except OperationalError as exc:
+                    if (
+                        isinstance(exc.orig, SerializationFailure)
+                        and exc.orig.pgcode == "40001"
+                    ):
+                        # The commit() failed because of SERIALIZABLE
+                        # isolation level, and should be retried.
+                        pass
+                    else:
+                        raise
+                else:
+                    committed = True
+                    break
+                pending_session.close()
+                pending_session = None
+            pending_session = _get_session()
+            yield pending_session
+
     try:
-        yield session
-        session.commit()
+        yield session_gen()
+        if not committed:
+            raise AssertionError("retry_txn loop exited early, data lost")
     except:
-        session.rollback()
+        if pending_session is not None:
+            pending_session.rollback()
         raise
     finally:
-        session.close()
+        if pending_session is not None:
+            pending_session.close()

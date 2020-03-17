@@ -25,7 +25,7 @@ import gidgethub
 import textwrap
 from glom import glom
 
-from .db import open_session, SentInvitation
+from .db import retry_txn, SentInvitation
 from .gh import GithubRoutes
 
 autoinvite_routes = GithubRoutes()
@@ -103,15 +103,17 @@ async def _member_state(gh_client, org, member):
 
 
 def already_sent_invitation(name):
-    with open_session() as session:
-        matches = session.query(SentInvitation).filter_by(name=name)
-        return session.query(matches.exists()).scalar()
+    with retry_txn() as attempts:
+        for session in attempts:
+            matches = session.query(SentInvitation).filter_by(name=name)
+            result = session.query(matches.exists()).scalar()
+    return result
 
 
 def record_sent_invitation(name):
-    with open_session() as session:
-        session.add(SentInvitation(name=name))
-        session.commit()
+    with retry_txn() as attempts:
+        for session in attempts:
+            session.add(SentInvitation(name=name))
 
 
 # There's no "merged" event; instead you get action=closed + merged=True

@@ -3,7 +3,7 @@ from weakref import WeakValueDictionary
 from glom import glom
 
 from .util import Pulse
-from .db import open_session, PDictDBEntry
+from .db import retry_txn, PDictDBEntry
 
 _UPDATE_PULSES = WeakValueDictionary()
 
@@ -56,44 +56,47 @@ class PDict:
             raise TypeError(
                 f"PDict value should be a dict, not {new_value!r}"
             )
-        with open_session() as session:
-            existing = (
-                session.query(PDictDBEntry)
-                .filter_by(domain=self.domain, item=self.item)
-                .one_or_none()
-            )
-            if existing is None:
-                session.add(
-                    PDictDBEntry(
-                        domain=self.domain, item=self.item, value=new_value
-                    )
+        with retry_txn() as attempts:
+            for session in attempts:
+                existing = (
+                    session.query(PDictDBEntry)
+                    .filter_by(domain=self.domain, item=self.item)
+                    .with_for_update()
+                    .one_or_none()
                 )
-            else:
-                try:
-                    existing.value = unify(existing.value, new_value)
-                except ValueError as exc:
-                    raise ValueError(
-                        f"inconsistent values for PDict({self.domain}, {self.item}): "
-                        f"current={existing.value!r}, new={new_value!r}"
-                    ) from exc
-            session.commit()
+                if existing is None:
+                    session.add(
+                        PDictDBEntry(
+                            domain=self.domain,
+                            item=self.item,
+                            value=new_value,
+                        )
+                    )
+                else:
+                    try:
+                        existing.value = unify(existing.value, new_value)
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"inconsistent values for PDict({self.domain}, {self.item}): "
+                            f"current={existing.value!r}, new={new_value!r}"
+                        ) from exc
         _pulse_for(self.domain, self.item).pulse()
 
     async def subscribe(self):
         """Yields a sequence of dict snapshots."""
         last_yield = None
         async for _ in _pulse_for(self.domain, self.item).subscribe():
-            with open_session() as session:
-                existing = (
-                    session.query(PDictDBEntry)
-                    .filter_by(domain=self.domain, item=self.item)
-                    .one_or_none()
-                )
-                if existing is None:
-                    value = {}
-                else:
-                    value = existing.value
-                    session.commit()
+            with retry_txn() as attempts:
+                for session in attempts:
+                    existing = (
+                        session.query(PDictDBEntry)
+                        .filter_by(domain=self.domain, item=self.item)
+                        .one_or_none()
+                    )
+                    if existing is None:
+                        value = {}
+                    else:
+                        value = existing.value
             if value != last_yield:
                 yield value
                 last_yield = value
