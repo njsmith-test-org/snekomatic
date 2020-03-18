@@ -146,6 +146,57 @@ def _get_session():
 
 @contextmanager
 def retry_txn():
+    """Helper for retrying database transactions.
+
+    We use Postgres's SERIALIZABLE isolation level, which has very
+    convenient semantics: every transaction happens "as if" it was in some
+    strict serial order, so race conditions are impossible, at least with
+    regards to database reads/writes. The trade-off, though, is that it's
+    possible that when we go to commit a transaction, Postgres will report
+    that it's impossible to do it in a SERIALIZABLE-safe fashion, in which
+    case it rolls it back, and then we need to retry it from the start. (For
+    example, maybe we read some data that another transaction later mutated,
+    and then we mutated some data that the other transaction read, so there's
+    no way to put them in order properly.)
+
+    To make this convenient, we always follow this idiom for database access:
+
+      with retry_txn() as attempts:
+          for session in attempts:
+              # use the sqlalchemy Session object
+              ...
+
+    If the code raises an exception, the transaction is automatically rolled
+    back and the session released. Otherwise, this will automatically attempt
+    to commit the transaction at the end of the 'for' block, and keep looping
+    until this succeeds.
+
+    Note that if you don't raise an exception, you MUST fall off the end of
+    the 'for' block. In particular, you CAN'T write code like this:
+
+      # BAD
+      with retry_txn() as attempts:
+          for session in attempts:
+              return session.query(...).one().some_attr
+
+    The problem is the 'return' – it causes Python to forcibly terminate the
+    'for' loop. So if Postgres then says we need to retry the transaction...
+    there's no way to do that. In this case retry_txn will detect the problem
+    and raise an AssertionError, so at least you'll notice. (Note: that's why
+    we have this somewhat awkward-to-implement structure with a 'with' around
+    a 'for'. An earlier prototype had a 'for' around a 'with', but it made it
+    impossible to automatically detect these kinds of errors, so had to be
+    scrapped.)
+
+    The correct way to write that:
+
+      # OK
+      with retry_txn() as attempts:
+          for session in attempts:
+              result = session.query(...).one().some_attr
+      return result
+
+    """
     committed = False
     pending_session = None
 
