@@ -157,20 +157,12 @@ async def worker_task_check_run_event(event_type, payload, gh_client):
 
     (_, task_id) = name.split("-", 1)
 
-    run_info = {
-        "type": "run-info",
-        "repo": repo,
-        "check-suite-id": glom(payload, "check_run.check_suite.id"),
-        "check-run-id": glom(payload, "check_run.id"),
-        "html-url": glom(payload, "check_run.html_url"),
-    }
-
     PDict("worker-task", task_id).update(
         {
             "repo": repo,
             "check-suite-id": glom(payload, "check_run.check_suite.id"),
             "check-run-id": glom(payload, "check_run.id"),
-            "html-url": glom(payload, "check_run.html-url"),
+            "html-url": glom(payload, "check_run.html_url"),
         }
     )
 
