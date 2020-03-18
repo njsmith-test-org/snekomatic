@@ -115,9 +115,9 @@ async def main(*, task_status=trio.TASK_STATUS_IGNORED):
         task_status.started(urls)
 
         print("running worker task")
-        messages = await nursery.start(run_worker_task_idem, {"hi": "there"})
-        async for message in messages:
-            print(f"got message: {message}")
+        state = await nursery.start(run_worker_task_idem, {"hi": "there"})
+        async for state_update in state.subscribe():
+            print(f"current state: {state_update}")
 
 
 async def worker(mode):
