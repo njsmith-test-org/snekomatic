@@ -46,6 +46,66 @@ class SentInvitation(Base):
     name = Column("entry", String, primary_key=True)
 
 
+# can we only store pending ones, and delete them after completion?
+# or should we store all of them?
+# if we store all of them, we can have a page that lists them, and provides
+# links to info... but then we also need to have a way to retrieve the info
+# from old ones, not just the ability to kick off a new (idempotent) job from
+# scratch.
+#
+# ...or maybe we just need a complete-or-not boolean, + the check_run URL, and
+# we can make a web page that links people to the check_run directly?
+#
+# if we need to automatically retry worker tasks in case of github/our bot
+# being flaky, then that might also require some extra state tracking, so we
+# can tell which retry we're on and create a unique worker task?
+#
+# XX TODO: track when housekeeping last ran on each repo+branch, so we can
+# schedule future ones (and do something intelligent to spread out the load)
+# XX TODO: enough info to let us report back results (comment? check run? I
+# guess we create a check run... ...and actually we'll want to create another
+# check run at the very end, on the final good revision, with a name like
+# "okay-to-merge" or "trio-bot-approved", so we can apply branch protection?
+# or can we just restrict access to the bot as a user?)
+#
+# XX maybe some of the event triggers include the PR's head sha? but not all
+# of them (e.g. a regular comment in as a pure issue comment event, no
+# PR-specific metadata at all). So I think we'll have to walk to the whole PR
+# timeline: https://developer.github.com/v3/issues/timeline/
+# in particular, we'll look for "committed" events to find the last head sha
+# before the "commented" event whose id matches our triggering event
+# kind of annoying, might chew through our API quota, but I guess there's
+# nothing to be done...
+# (the events are returned in chronological order, so if we could iterate
+# backwards it would use fewer API calls)
+# ...also uh... are reviews even included in the output?
+# ...answer: yes, there's an undocumented "reviewed" event type
+# it has keys: id, node_id, user object, body text, commit_id (= the head sha!),
+# submitted_at, state, html_url, pull_request_url, author_association, _links,
+# and event (= "reviewed")
+# but when we get a review or review-comment notification, it already has the
+# head sha, so we don't even need to look at the event timeline.
+# (and likewise for initial pull-request-created events, though I dunno if we
+# really care about supporting /merge inside a PR-created event? well, we do
+# want to support /try there.)
+# class PendingBuild(Base):
+#     __tablename__ = "pending_build"
+
+#     id = Column(
+#         "id", Integer, Sequence("pending_build_id_seq"), primary_key=True
+#     )
+#     repo = Column("repo", String, nullable=False)
+#     target_branch = Column("target_branch", String, nullable=False)
+#     # type: try, merge, housekeeping
+#     type = Column("type", String, nullable=False)
+#     # For try/merge only:
+#     pr = Column("pr", Integer, nullable=True)
+#     # The approved revision within the PR
+#     head_sha = Column("head_sha", String, nullable=True)
+#     trigger_event_type = Column("trigger_event_type", String, nullable=True)
+#     trigger_payload = Column("trigger_payload", JSONB, nullable=True)
+
+
 class PDictDBEntry(Base):
     __tablename__ = "pdict"
 
