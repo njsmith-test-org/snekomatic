@@ -4389,6 +4389,27 @@ name: "pipelinename ${{ github.event.client_payload.jobid }}"
 
 - Your workflow file was invalid: The pipeline is not valid. .github/workflows/templ.yml (Line: 3, Col: 7): Unrecognized named-value: 'github'. Located at position 1 within expression: github.event.client_payload.jobid
 
+* In case we ever wanted to support multiple simultaneous processes (old + new during upgrade)...
+https://devcenter.heroku.com/articles/preboot
+
+Could move Pulse into the DB by sending them through NOTIFY/LISTEN
+we'd use like, one channel
+and each process would want one background task that subscribes to the channel and uses the payload to identify which "PPulse" is being signaled
+(each listener consumes a postgres connection, so you really only want one)
+
+you accomplish this by connecting through psycopg2, enabling autocommit mode, and then alternating between waiting for the underlying fd to become readable, then calling .poll(), then checking the .notifies attribute
+https://www.psycopg.org/docs/advanced.html#async-notify
+(another example: https://lbolla.info/chat-postgres-ioloop)
+
+Could ensure that only one process is actively running jobs by using a postgres advisory lock?
+https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
+or maybe it's safe to have multiple instances running the same jobs simultaneously, if they're sufficiently idempotent...
+
+probably don't want to use fine-grained per-job locks, because that will chew up tons of idle db connections
+could use an advisory lock to elect a session leader though
+
+would need to think about db migrations
+
 * Old notes
 
 Tutorial: https://docs.octomachinery.dev/projects/tutorial/
